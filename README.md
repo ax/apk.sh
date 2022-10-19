@@ -16,13 +16,16 @@ Decoding an APK is simple as running `./apk.sh decode <apk_name>`
 
 Rebuilding an APK is simple as running  `./apk.sh build <apk_dir>`
 
-Patching an APK is simple as running  `./apk.sh patch <apk_name> --arch arm`, you can calso speciify a Frida gadget configuration `./apk.sh patch <apk_name> --arch arm --gadget-conf <config.json>`
+## apk.sh patch
+`apk.sh patch` patch an APK to load [frida-gadget.so](https://frida.re/docs/gadget/) on start.
+
+frida-gadget.so is a Frida's shared library meant to be loaded by programs to be instrumented (when the Injected mode of operation isn’t suitable). By simply loading the library it will allow you to interact with it using existing Frida-based tools like frida-trace. It also supports a fully autonomous approach where it can run scripts off the filesystem without any outside communication.
+
+Patching an APK is simple as running  `./apk.sh patch <apk_name> --arch arm`.
+
+You can calso specify a Frida gadget configuration in a json `./apk.sh patch <apk_name> --arch arm --gadget-conf <config.json>`
 
 ## Frida's Gadget configurations
-`apk.sh patch` patch an APK to load frida-gadget.so on start.
-
-[frida-gadget.so](https://frida.re/docs/gadget/) is a Frida's shared library meant to be loaded by programs to be instrumented (when the Injected mode of operation isn’t suitable). By simply loading the library it will allow you to interact with it using existing Frida-based tools like frida-trace. It also supports a fully autonomous approach where it can run scripts off the filesystem without any outside communication.
-
 In the default interaction, Frida Gadget exposes a frida-server compatible interface, listening on localhost:27042 by default. In order to achieve early instrumentation Frida let Gadget’s constructor function block until you either `attach()` to the process, or call `resume()` after going through the usual `spawn()` -> `attach()` -> `...apply instrumentation...` steps.
 
 If you don’t want this blocking behavior and want to let the program boot right up, or you’d prefer it listening on a different interface or port, you can customize this through a json configuration file.
@@ -40,7 +43,7 @@ The default configuration is:
 }
 ```
 
-You can pass the gadget config file to `apk.sh` with the `--gadget-conf` option.
+You can pass the gadget configuration file to `apk.sh` with the `--gadget-conf` option.
 
 A typically suggested configuration might be:
 ```json
