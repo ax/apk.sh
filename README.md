@@ -1,4 +1,4 @@
-# apk.sh
+# :joystick: apk.sh
 apk.sh is a Bash script that makes reverse engineering Android apps easier, automating some repetitive tasks like pulling, decoding, rebuilding and patching an APK.
 
 
@@ -6,21 +6,21 @@ apk.sh is a Bash script that makes reverse engineering Android apps easier, auto
 apk.sh basically uses [apktool](https://ibotpeaches.github.io/Apktool/) to disassemble, decode and rebuild resources and some bash to automate the [frida](https://https://frida.re/) gadget injection process.
 It also supports app bundles/split APKs. 
 
- - Patching APKs to load frida-gadget.so on start.
- - Support for app bundles/split APKs.
- - Disassembling resources to nearly original form with apktool.
- - Rebuilding decoded resources back to binary APK/JAR with apktool.
- - Code signing the apk with apksigner.
- - Multiple arch support (arm, arm64, x86, x86_64). 
- - No rooted Android device needed.
+ -  :mushroom: Patching APKs to load frida-gadget.so on start.
+ -  :new: Support for app bundles/split APKs.
+ -  :wrench: Disassembling resources to nearly original form with apktool.
+ -  :nut_and_bolt: Rebuilding decoded resources back to binary APK/JAR with apktool.
+ -  :old_key: Code signing the apk with apksigner.
+ -  :desktop_computer: Multiple arch support (arm, arm64, x86, x86_64). 
+ -  :no_mobile_phones: No rooted Android device needed.
 
 
 ## Getting started
-Pulling an APK from a device is simple as running `./apk.sh pull <package_name>`
+:arrow_left: Pulling an APK from a device is simple as running `./apk.sh pull <package_name>`
 
-Decoding an APK is simple as running `./apk.sh decode <apk_name>`
+:wrench: Decoding an APK is simple as running `./apk.sh decode <apk_name>`
 
-Rebuilding an APK is simple as running  `./apk.sh build <apk_dir>`
+:nut_and_bolt: Rebuilding an APK is simple as running  `./apk.sh build <apk_dir>`
 
 
 ## apk.sh pull
@@ -38,7 +38,7 @@ Patching an APK is simple as running  `./apk.sh patch <apk_name> --arch arm`.
 
 You can calso specify a Frida gadget configuration in a json `./apk.sh patch <apk_name> --arch arm --gadget-conf <config.json>`
 
-## Frida's Gadget configurations
+## :mushroom: Frida's Gadget configurations
 In the default interaction, Frida Gadget exposes a frida-server compatible interface, listening on localhost:27042 by default. In order to achieve early instrumentation Frida let Gadget’s constructor function block until you either `attach()` to the process, or call `resume()` after going through the usual `spawn()` -> `attach()` -> `...apply instrumentation...` steps.
 
 If you don’t want this blocking behavior and want to let the program boot right up, or you’d prefer it listening on a different interface or port, you can customize this through a json configuration file.
@@ -106,9 +106,10 @@ android_log_write(3, tag, Memory.allocUtf8String(">--(O.o)-<)");
 - unxz
 - zipalign
 - aapt
+- adb
 
 
-## Links of Interest
+## :page_with_curl: Links of Interest
 https://frida.re/docs/gadget/
 
 https://lief-project.github.io/doc/latest/tutorials/09_frida_lief.html
@@ -116,5 +117,7 @@ https://lief-project.github.io/doc/latest/tutorials/09_frida_lief.html
 https://koz.io/using-frida-on-android-without-root/
 
 https://github.com/sensepost/objection/
+
+https://github.com/NickstaDB/patch-apk/
 
 https://neo-geo2.gitbook.io/adventures-on-security/frida-scripting-guide/frida-scripting-guide
