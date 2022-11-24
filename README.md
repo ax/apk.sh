@@ -1,17 +1,19 @@
 # apk.sh
 apk.sh is a Bash script that makes reverse engineering Android apps easier, automating some repetitive tasks like pulling, decoding, rebuilding and patching an APK.
 
+
 ## Features
 apk.sh basically uses [apktool](https://ibotpeaches.github.io/Apktool/) to disassemble, decode and rebuild resources and some bash to automate the [frida](https://https://frida.re/) gadget injection process.
 It also supports app bundles/split APKs. 
 
  - Patching APKs to load frida-gadget.so on start.
+ - Support for app bundles/split APKs.
  - Disassembling resources to nearly original form with apktool.
  - Rebuilding decoded resources back to binary APK/JAR with apktool.
  - Code signing the apk with apksigner.
- - Multiple arch support (arm, arm64, x86, x86_64).
- - Support for app bundles/split APKs. 
+ - Multiple arch support (arm, arm64, x86, x86_64). 
  - No rooted Android device needed.
+
 
 ## Getting started
 Pulling an APK from a device is simple as running `./apk.sh pull <package_name>`
@@ -19,6 +21,13 @@ Pulling an APK from a device is simple as running `./apk.sh pull <package_name>`
 Decoding an APK is simple as running `./apk.sh decode <apk_name>`
 
 Rebuilding an APK is simple as running  `./apk.sh build <apk_dir>`
+
+
+## apk.sh pull
+`apk.sh pull` pull an APK from a device.
+It supports app bundles/split APKs, which means that split APKs will be joined in a single APK (this is useful for patching). 
+If the package is an app bundle/split APK, apk.sh will combine the APKs into a single APK, fixing all public resource identifiers.
+
 
 ## apk.sh patch
 `apk.sh patch` patch an APK to load [frida-gadget.so](https://frida.re/docs/gadget/) on start.
@@ -97,9 +106,6 @@ android_log_write(3, tag, Memory.allocUtf8String(">--(O.o)-<)");
 - unxz
 - zipalign
 - aapt
-
-## apk.sh pull
-`apk.sh pull` pull an APK from a device.
 
 
 ## Links of Interest
