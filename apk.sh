@@ -1,14 +1,16 @@
 #!/bin/bash
 #
-# apk.sh v0.9.4
+# apk.sh v0.9.5
 # author: ax
+# site: github.com/ax
 #
 # References:
 # https://koz.io/using-frida-on-android-without-root/
 # https://github.com/sensepost/objection/
+# https://github.com/NickstaDB/patch-apk
 #
 
-VERSION="v0.9.4"
+VERSION="v0.9.5"
 
 APK_SH_HOME="${HOME}/.apk.sh"
 mkdir -p $APK_SH_HOME
@@ -21,7 +23,7 @@ echo "[*] home dir is $APK_SH_HOME"
 
 check_apk_tools(){
 	if [ -f "$APKTOOL_PATH" ]; then
-		echo "[>] apktool v2.6.1 exist in $APK_SH_HOME"
+		echo "[*] apktool v2.6.1 exist in $APK_SH_HOME"
 	else
 		echo "[!] No apktool v2.6.1 found!"
 		echo "[>] Downloading apktool from $APKTOOL_DOWNLOAD_URL"
@@ -106,6 +108,141 @@ apk_build(){
 	mv file-aligned.apk file.apk
 	echo "[>] file.apk ready!"
 	echo "[>] Done!"
+}
+
+
+apk_pull(){
+	PACKAGE=$1
+	PACKAGE_PATH=`adb shell pm path $PACKAGE | cut -d ":" -f 2`
+	# TODO process output of adb shell pm to manage split APKs.
+	if [ -z "$PACKAGE_PATH" ]; then
+		echo "[>] Sorry, cant find package $PACKAGE"
+		echo "[>] Bye!"
+		exit
+	fi
+	NUM_APK=`echo "$PACKAGE_PATH" | wc -l`
+	if [ $NUM_APK > 1 ]; then
+		SPLIT_DIR=$PACKAGE"_split_apks"
+		mkdir -p $SPLIT_DIR 
+		echo "[>] Pulling $PACKAGE: Split apks detected!"
+		echo "[>] Pulling $NUM_APK apks in $SPLIT_DIR"
+	fi
+	echo "[>] Pulling $PACKAGE from $PACKAGE_PATH<<<"
+	# todo CHECK IF adb cant pull
+	PULLED=`adb pull $PACKAGE_PATH $SPLIT_DIR`
+
+	#	We have to combine split APKs into a single APK, for patching. 
+	#	.
+	#	Decode all the apks
+	SPLIT_APKS=($SPLIT_DIR/*)
+	for i in "${SPLIT_APKS[@]}"
+	do
+		echo $i
+		APK_NAME=$i
+		APK_DIR=${APK_NAME%.apk} # bash 3.x compliant xD
+		APKTOOL_DECODE_OPTS="d $APK_NAME -o $APK_DIR"
+		APKTOOL_DECODE_CMD="java -jar $APKTOOL_PATH $APKTOOL_DECODE_OPTS"
+		apk_decode "$APKTOOL_DECODE_CMD 1>/dev/null"
+	done
+	#	Walk the extracted APK dirs and copy files and dirs to the base APK dir 
+	for i in "${SPLIT_APKS[@]}"
+	do
+		#echo $i
+		APK_NAME=$i
+		APK_DIR=${APK_NAME%.apk} # bash 3.x compliant xD
+		# skip base.apk
+		if [ $APK_DIR == $SPLIT_DIR"/base" ]; then
+			continue
+		fi
+		echo "[-----] APK DIRECTORY: "$APK_DIR
+		# Walk each apk dir
+		FILES_IN_SPLIT_APK=($APK_DIR/*)
+		for j in "${FILES_IN_SPLIT_APK[@]}"
+		do
+			echo "[.] Split apks file: "$j
+			# Skip Manifest, apktool.yml, and the original files dir.
+			if [[ $j == *AndroidManifest.xml ]] || [[ $j == *apktool.yml ]] || [[ $j == *original ]]; then
+				echo "[-] Skip!"
+				echo ""
+				continue
+			fi
+			#	Copy files into the base APK, except for XML files in the res directory
+			if [[ $j == */res ]]; then
+				echo "[.] /res direcorty found!":
+				echo "dollaro j "$j
+				echo "splitdir "$SPLIT_DIR
+				(cd $j; find . -type f ! -name '*.xml' -exec cp --parents {} ../../base/res/ \; -exec echo [+] Copying res that are not xml {} \;)    
+				continue
+			fi
+			echo "[>] Copying directory cp -R $j in $SPLIT_DIR/base/ ...."
+			cp -R $j $SPLIT_DIR"/base/"
+		done
+	done
+	#	Fix public resource identifiers   
+	#	Find all resource IDs with name APKTOOOL_DUMMY_xxx in the base dir
+	DUMMY_IDS=`grep -r "APKTOOL_DUMMY_" $SPLIT_DIR"/base" | grep -Po "id=\"\K.*?(?=\")" | grep 0x`
+	stra=($DUMMY_IDS)
+	for j in "${stra[@]}"
+	do
+		echo "[~] DUMMY_ID_TO_FIX: "$j
+		#	Get the dummy name grepping for the resource ID
+		DUMMY_NAME=`grep -r "$j" $SPLIT_DIR/base | grep DUMMY | grep -Po "name=\"\K.*?(?=\")"`
+		echo "[~] DUMMY_NAME: "$DUMMY_NAME
+		#	Get the real resource name grepping for the resource ID in each spit APK
+		REAL_NAME=`grep -r "$j" $SPLIT_DIR | grep -v DUMMY | grep -v base | grep name | grep -Po "name=\"\K.*?(?=\")"`
+		echo "[~] REAL_NAME: "$REAL_NAME
+		# Grep DUMMY_NAME and substitute the real resource name in the base dir
+		echo "[~] File of base.apk with the DUMMY_NAME to update:"
+		grep -r "\<$DUMMY_NAME\>" $SPLIT_DIR"/base" | grep "\.xml:"
+		grep -r "\<$DUMMY_NAME\>" $SPLIT_DIR"/base" | grep "\.xml:" | cut -d ":" -f 1 | xargs sed -i "s/\<$DUMMY_NAME\>/$REAL_NAME/g"
+		echo "[~] Updated line:"
+		grep -r "\<$REAL_NAME\>" $SPLIT_DIR"/base" | grep "\.xml:" 
+		echo "---"
+	done
+
+ 	#	Disable APK splitting in the base manifest file, if it’s not there already done.        
+	echo "[>] Disabling APK splitting..."
+	echo "[?] Checking if android:isSplitRequired is set to false..."
+	SPLIT_REQUIRED=0
+	MANIFEST_PATH="$SPLIT_DIR/base/AndroidManifest.xml"
+	readarray -t manifest < $MANIFEST_PATH
+	for i in "${manifest[@]}"
+	do
+		if [[ "$i" == *"android:isSplitRequired=\"false\""* ]]; then
+			SPLIT_REQUIRED=1
+			echo "[>] android:isSplitRequired already set to false!"
+			break
+		fi
+	done
+	if [[ $SPLIT_REQUIRED == 0 ]]; then
+		echo "[!] android:isSplitRequired not set to false in the Manifest!"
+		echo "[>] Patching base AndroidManifest.xml setting android:isSplitRequired to false.."
+		echo "[>] Patching $MANIFEST_PATH"
+		sed -i "s/android:isSplitRequired=\"true\"/android:isSplitRequired=\"false\"/g" $MANIFEST_PATH
+		echo "[>] Patched !"
+	fi
+
+# Set android:extractNativeLibs="true" in the Manifest if you experience any adb: failed to install file.gadget.apk: Failure [INSTALL_FAILED_INVALID_APK: Failed to extract native libraries, res=-2]
+	echo "[>] Enabling native libraries extraction if it was set to false..."
+	MANIFEST_PATH="$SPLIT_DIR/base/AndroidManifest.xml"
+	# if the tag exist and is set to false, set it to true, otherwise do nothing
+	sed -i "s/android:extractNativeLibs=\"false\"/android:android:extractNativeLibs=\"true\"/g" $MANIFEST_PATH
+	echo "[>] Done!"
+	fi
+
+	#	Rebuild the base APK 
+	APKTOOL_BUILD_OPTS="b -d $SPLIT_DIR"/base" -o file.apk --use-aapt2"
+	APKTOOL_BUILD_CMD="java -jar $APKTOOL_PATH $APKTOOL_BUILD_OPTS"
+	apk_build "$APKTOOL_BUILD_CMD"
+	mv file.apk single_file.apk
+	echo "[>] single_file.apk ready!"
+	echo "[>] Bye!"
+
+
+}
+
+apk_patch(){
+	# TODO
 }
 
 
@@ -374,6 +511,14 @@ elif [ ! -z $1 ]&&[ $1 == "patch" ]; then
 	mv file.apk $APK_DIR.gadget.apk
 	echo "[>] $APK_DIR.gadget.apk ready!"
 	echo "[>] Bye!"
+elif [ ! -z $1 ]&&[ $1 == "pull" ]; then
+	if [ -z "$2" ]; then
+    	echo "Pass the package name!"
+    	echo "./apk pull <com.package.name>"
+		exit
+	fi
+	PACKAGE_NAME=$2
+	apk_pull "$PACKAGE_NAME"
 else
     echo "./apk build <apk_dir>"
 	echo "./apk decode <apk_name.apk>"
