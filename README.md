@@ -96,8 +96,9 @@ console.error("console.error");
 console.warn("WARN");
 android_log_write(3, tag, Memory.allocUtf8String(">--(O.o)-<)");
 ```
-
+`adb push script.js /data/local/tmp`
 `./apk.sh patch <apk_name> --arch arm --gadget-conf <config.json>`
+`adb install file.gadget.apk`
 
 ## Requirements
 
