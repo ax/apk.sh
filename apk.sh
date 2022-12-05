@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# apk.sh v0.9.6
+# apk.sh v0.9.7
 # author: ax - github.com/ax
 #
 # References:
@@ -9,7 +9,7 @@
 # https://github.com/NickstaDB/patch-apk
 #
 
-VERSION="v0.9.6"
+VERSION="v0.9.7"
 
 APK_SH_HOME="${HOME}/.apk.sh"
 mkdir -p $APK_SH_HOME
@@ -21,8 +21,8 @@ echo -e "[*] \033[1mapk.sh $VERSION \033[0m"
 echo "[*] home dir is $APK_SH_HOME"
 
 print_(){
-	:
-	#echo $1
+	#:
+	echo $1
 }
 print_ "[*] DEBUG is TRUE"
 
@@ -177,7 +177,7 @@ apk_pull(){
 				#	Copy files into the base APK, except for XML files in the res directory
 				if [[ $j == */res ]]; then
 					print_ "[.] /res direcorty found!":
-					(cd $j; find . -type f ! -name '*.xml' -exec cp --parents {} ../../base/res/ \;)# -exec echo '[+] Copying res that are not xml {}'\;)    
+					(cd $j; find . -type f ! -name '*.xml' -exec cp --parents {} ../../base/res/ \; -exec echo '[+] Copying res that are not xml {}'\;)    
 					continue
 				fi
 				print_ "[>] Copying directory cp -R $j in $SPLIT_DIR/base/ ...."
@@ -285,7 +285,7 @@ elif [ ! -z $1 ]&&[ $1 == "patch" ]; then
 	x86=("x86")
 	x86_64=("x86_64")
 	# supported_arch=("arm" "arm64" "x86" "x86_64")
-	supported_arch=("arm" "x86_64" "x86")
+	supported_arch=("arm" "x86_64" "x86" "arm64")
 	GADGET_VER="15.1.28"
 	GADGET_ARM="frida-gadget-15.1.28-android-arm.so.xz"
 	GADGET_ARM64="frida-gadget-15.1.28-android-arm64.so.xz"
@@ -334,21 +334,26 @@ elif [ ! -z $1 ]&&[ $1 == "patch" ]; then
 		exit
 	fi
 
-	if [ -z $5 ]||[ "$5" != "--gadget-conf" ]; then
-		echo $5
-		echo "Pass the --gadget-conf param"
-    	echo "./apk patch <apkname.apk> --arch arm --gadget-conf <file>"
-		echo "[>] Bye!"
-		exit
-	fi
-	GADGET_CONF_PATH=$6
-	if [ ! -f "$GADGET_CONF_PATH" ]; then
-		echo "[!] Gadget configuration json file ($GADGET_CONF_PATH) not found!"
-		echo "[>] Bye!"
-		exit
+	echo "<$5>"
+	# optional arg, if --gadget-conf exist:
+	if ! [ -z $5 ]; then
+		if	[ "$5" != "--gadget-conf" ]; then
+			echo $5
+			echo "Pass the --gadget-conf param"
+    		echo "./apk patch <apkname.apk> --arch arm --gadget-conf <file>"
+			echo "[>] Bye!"
+			exit
+		fi
+
+		GADGET_CONF_PATH=$6
+		if [ ! -f "$GADGET_CONF_PATH" ]; then
+			echo "[!] Gadget configuration json file ($GADGET_CONF_PATH) not found!"
+			echo "[>] Bye!"
+			exit
+		fi
 	fi
 
-	echo "[>] Injecting Frida gadget for $ARCH in $APK_NAME..."
+		echo "[>] Injecting Frida gadget for $ARCH in $APK_NAME..."
 
 	if [[ ${ARCH} == "arm"  ]]; then
 		GADGET=$GADGET_ARM
@@ -403,8 +408,27 @@ elif [ ! -z $1 ]&&[ $1 == "patch" ]; then
 	# Try to determine the local path for a target class' smali converting the main activity to a path
 	MAIN_ACTIVITY_2PATH=`echo $MAIN_ACTIVITY | tr '.' '/'`
 	CLASS_PATH="./$APK_DIR/smali/$MAIN_ACTIVITY_2PATH.smali"
-	echo "[>] Local path is $CLASS_PATH"
-	# NOTE: if the class does not exist it might be a multidex setup, Smali not found in smali directory. Look for _2 _3 etc. 
+	echo "[>] Local path should be $CLASS_PATH"
+	# NOTE: if the class does not exist it might be a multidex setup.
+	# Search the class in smali_classesN directories. 
+	CLASS_PATH_IND=1 # starts from 2
+	while [ ! -f "$CLASS_PATH" ]
+	do
+		echo "[!] $CLASS_PATH does not exist! Probably a multidex APK..."
+		if [ $CLASS_PATH_IND -gt 2 ]; then
+			# keep searching until smali_classes3 then exit
+			echo "[>] $CLASS_PATH NOT FOUND!"
+			echo "[!] Can't find the launchable-activity! Sorry."
+			echo "[>] Bye!"
+			exit
+		fi
+		CLASS_PATH_IND=$((CLASS_PATH_IND+1))
+		 # ./base/smali/
+		 # ./base/smali_classes2/
+		CLASS_PATH="./$APK_DIR/smali_classes$CLASS_PATH_IND/$MAIN_ACTIVITY_2PATH.smali"
+		echo "[?] Looking in $CLASS_PATH..."
+	done
+	
 	#
 	# Now, patch the smali, look for the line with the apktool's comment "# direct methods" 
 	# Patch the smali with the appropriate loadLibrary call based on wether a constructor already exists or not.
@@ -419,6 +443,7 @@ elif [ ! -z $1 ]&&[ $1 == "patch" ]; then
 	# <init> is the (or one of the) constructor(s) for the instance, and non-static field initialization.
 	# <clinit> are the static initialization blocks for the class, and static field initialization.
 	#
+	echo "[>] $CLASS_PATH found!"
 	echo "[>] Patching smali..."
 	readarray -t lines < $CLASS_PATH
 	index=0
