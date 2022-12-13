@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# apk.sh v0.9.7
+# apk.sh v0.9.8
 # author: ax - github.com/ax
 #
 # References:
@@ -9,31 +9,34 @@
 # https://github.com/NickstaDB/patch-apk
 #
 
-VERSION="v0.9.7"
+VERSION="0.9.8"
+echo -e "[*] \033[1mapk.sh v$VERSION \033[0m"
 
 APK_SH_HOME="${HOME}/.apk.sh"
 mkdir -p $APK_SH_HOME
-
-APKTOOL_DOWNLOAD_URL="https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.6.1.jar"
-APKTOOL_PATH="$APK_SH_HOME/apktool_2.6.1.jar"
-
-echo -e "[*] \033[1mapk.sh $VERSION \033[0m"
 echo "[*] home dir is $APK_SH_HOME"
 
+supported_arch=("arm" "x86_64" "x86" "arm64")
+
 print_(){
-	#:
-	echo $1
+	:
+	#echo $1
 }
 print_ "[*] DEBUG is TRUE"
 
+APKTOOL_VER="2.7.0"
+APKTOOL_PATH="$APK_SH_HOME/apktool_$APKTOOL_VER.jar"
+
 check_apk_tools(){
 	if [ -f "$APKTOOL_PATH" ]; then
-		echo "[*] apktool v2.6.1 exist in $APK_SH_HOME"
+		echo "[*] apktool v$APKTOOL_VER exist in $APK_SH_HOME"
 	else
-		echo "[!] No apktool v2.6.1 found!"
+		APKTOOL_DOWNLOAD_URL_BB="https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_$APKTOOL_VER.jar"
+		APKTOOL_DOWNLOAD_URL_GH="https://github.com/iBotPeaches/Apktool/releases/download/v$APKTOOL_VER/apktool_$APKTOOL_VER.jar"
+		APKTOOL_DOWNLOAD_URL=$APKTOOL_DOWNLOAD_URL_GH
+		echo "[!] No apktool v$APKTOOL_VER found!"
 		echo "[>] Downloading apktool from $APKTOOL_DOWNLOAD_URL"
 		wget $APKTOOL_DOWNLOAD_URL -q --show-progress -P $APK_SH_HOME 
-		APKTOOL_PATH="$APK_SH_HOME/apktool_2.6.1.jar"
 	fi
 	if  is_not_installed 'apksigner'; then
 		echo "[>] No apksigner found!"
@@ -121,171 +124,18 @@ apk_build(){
 }
 
 
-apk_pull(){
-	PACKAGE=$1
-	PACKAGE_PATH=`adb shell pm path $PACKAGE | cut -d ":" -f 2`
-	# TODO process output of adb shell pm to manage split APKs.
-	if [ -z "$PACKAGE_PATH" ]; then
-		echo "[>] Sorry, cant find package $PACKAGE"
-		echo "[>] Bye!"
-		exit
-	fi
-	NUM_APK=`echo "$PACKAGE_PATH" | wc -l`
-	if [ $NUM_APK -gt 1 ]; then
-		SPLIT_DIR=$PACKAGE"_split_apks"
-		mkdir -p $SPLIT_DIR 
-		echo "[>] Pulling $PACKAGE: Split apks detected!"
-		echo "[>] Pulling $NUM_APK apks in ./$SPLIT_DIR/"
-		print_ "[>] Pulling $PACKAGE from $PACKAGE_PATH<<<"
-		# todo CHECK IF adb cant pull
-		PULLED=`adb pull $PACKAGE_PATH $SPLIT_DIR`
+apk_patch(){
+# Frida gadget exposes a frida-server compatible interface, listening on localhost:27042 by default.
+# run as soon as possible: frida -D emulator-5554 -n Gadget
 
-	#	We have to combine split APKs into a single APK, for patching. 
-		#	Decode all the APKs.
-		echo "[>] Combining split APKs into a single APK..."
-		SPLIT_APKS=($SPLIT_DIR/*)
-		for i in "${SPLIT_APKS[@]}"
-		do
-			print_ $i
-			APK_NAME=$i
-			APK_DIR=${APK_NAME%.apk} # bash 3.x compliant xD
-			APKTOOL_DECODE_OPTS="d $APK_NAME -o $APK_DIR"
-			APKTOOL_DECODE_CMD="java -jar $APKTOOL_PATH $APKTOOL_DECODE_OPTS"
-			apk_decode "$APKTOOL_DECODE_CMD 1>/dev/null"
-		done
-		#	Walk the extracted APKs dirs and copy files and dirs to the base APK dir. 
-		echo "[>] Walking extracted APKs dirs and copying files to the base APK..."
-		for i in "${SPLIT_APKS[@]}"
-		do
-			APK_NAME=$i
-			APK_DIR=${APK_NAME%.apk} # bash 3.x compliant xD
+	APK_NAME=$1
+	ARCH=$2
+	GADGET_CONF_PATH=$3
 
-			#	Skip base.apk.
-			if [ $APK_DIR == $SPLIT_DIR"/base" ]; then
-				continue
-			fi
-			# Walk each apk dir.
-			FILES_IN_SPLIT_APK=($APK_DIR/*)
-			for j in "${FILES_IN_SPLIT_APK[@]}"
-			do
-				print_ "[>>>>] Parsing split apks file: "$j
-				# Skip Manifest, apktool.yml, and the original files dir.
-				if [[ $j == *AndroidManifest.xml ]] || [[ $j == *apktool.yml ]] || [[ $j == *original ]]; then
-					print_ "[-] Skip!"
-					continue
-				fi
-				#	Copy files into the base APK, except for XML files in the res directory
-				if [[ $j == */res ]]; then
-					print_ "[.] /res direcorty found!":
-					(cd $j; find . -type f ! -name '*.xml' -exec cp --parents {} ../../base/res/ \; -exec echo '[+] Copying res that are not xml {}'\;)    
-					continue
-				fi
-				print_ "[>] Copying directory cp -R $j in $SPLIT_DIR/base/ ...."
-				cp -R $j $SPLIT_DIR"/base/"
-			done
-		done
-		echo "[>] Fixing APKTOOL_DUMMY public resource identifiers..."
-		#	Fix public resource identifiers. 
-		#	Find all resource IDs with name APKTOOOL_DUMMY_xxx in the base dir
-		DUMMY_IDS=`grep -r "APKTOOL_DUMMY_" $SPLIT_DIR"/base" | grep -Po "id=\"\K.*?(?=\")" | grep 0x`
-		stra=($DUMMY_IDS)
-		for j in "${stra[@]}"
-		do
-			print_ "[~] DUMMY_ID_TO_FIX: "$j
-			#	Get the dummy name grepping for the resource ID
-			DUMMY_NAME=`grep -r "$j" $SPLIT_DIR/base | grep DUMMY | grep -Po "name=\"\K.*?(?=\")"`
-			print_ "[~] DUMMY_NAME: "$DUMMY_NAME
-			#	Get the real resource name grepping for the resource ID in each spit APK
-			REAL_NAME=`grep -r "$j" $SPLIT_DIR | grep -v DUMMY | grep -v base | grep name | grep -Po "name=\"\K.*?(?=\")"`
-			print_ "[~] REAL_NAME: "$REAL_NAME
-			# Grep DUMMY_NAME and substitute the real resource name in the base dir
-			print_ "[~] File of base.apk with the DUMMY_NAME to update:"
-			#grep -r "\<$DUMMY_NAME\>" $SPLIT_DIR"/base" | grep "\.xml:"
-			grep -r "\<$DUMMY_NAME\>" $SPLIT_DIR"/base" | grep "\.xml:" | cut -d ":" -f 1 | xargs sed -i "s/\<$DUMMY_NAME\>/$REAL_NAME/g"
-			print_ "[~] Updated line:"
-			#grep -r "\<$REAL_NAME\>" $SPLIT_DIR"/base" | grep "\.xml:" 
-			print_ "---"
-		done
-		echo "[>] Done!"
-
-		#	Disable APK splitting in the base manifest file, if it’s not there already done.        
-		MANIFEST_PATH="$SPLIT_DIR/base/AndroidManifest.xml"
-		echo "[>] Disabling APK splitting (isSplitRequired=false) if it was set to true..."
-		sed -i "s/android:isSplitRequired=\"true\"/android:isSplitRequired=\"false\"/g" $MANIFEST_PATH
-		echo "[>] Done!"
-		#	Set android:extractNativeLibs="true" in the Manifest if you experience any adb: failed to install file.gadget.apk:
-		#	Failure [INSTALL_FAILED_INVALID_APK: Failed to extract native libraries, res=-2]
-		echo "[>] Enabling native libraries extraction if it was set to false..."
-		#	If the tag exist and is set to false, set it to true, otherwise do nothing
-		sed -i "s/android:extractNativeLibs=\"false\"/android:extractNativeLibs=\"true\"/g" $MANIFEST_PATH
-		echo "[>] Done!"
-		#	Rebuild the base APK 
-		APKTOOL_BUILD_OPTS="b -d $SPLIT_DIR"/base" -o file.apk --use-aapt2"
-		APKTOOL_BUILD_CMD="java -jar $APKTOOL_PATH $APKTOOL_BUILD_OPTS"
-		apk_build "$APKTOOL_BUILD_CMD"
-		mv file.apk file.single.apk
-		echo "[>] file.single.apk ready!"
-		echo "[>] Bye!"
-	else
-		echo "[>] Pulling $PACKAGE from $PACKAGE_PATH"
-		# todo CHECK IF adb cant pull
-		PULLED=`adb pull $PACKAGE_PATH $SPLIT_DIR`
-		echo "[>] Done!"
-		echo "[>] Bye!"
-	fi
-		}
-
-#####################################################################
-#####################################################################
-
-check_apk_tools 
-
-if [ ! -z $1 ]&&[ $1 == "build" ]; then
-	if [ -z "$2" ]; then
-    	echo "Pass the apk directory name!"
-    	echo "./apk build <apk_dir>"
-		exit
-	fi
-#	
-# It seems there is a problem with apktool build and manifest attribute android:dataExtractionRules 
-# 	: /home/ax/AndroidManifest.xml:30: error: attribute android:dataExtractionRules not found.
-# 	W: error: failed processing manifest.
-# Temporary workaround: remove the attribute from the Manifest and use Android 9 
-#
-# Set android:extractNativeLibs="true" in the Manifest if you experience any adb: failed to install file.gadget.apk: Failure [INSTALL_FAILED_INVALID_APK: Failed to extract native libraries, res=-2]
-# https://github.com/iBotPeaches/Apktool/issues/1626 - zipalign -p 4 seems to not resolve the issue.
-#
-
-	APK_DIR=$2
-	APKTOOL_BUILD_OPTS="b -d $APK_DIR -o file.apk --use-aapt2"
-	APKTOOL_BUILD_CMD="java -jar $APKTOOL_PATH $APKTOOL_BUILD_OPTS"
-	#echo "[>] Building $APK_DIR with $APKTOOL_BUILD_CMD"
-	apk_build "$APKTOOL_BUILD_CMD"
-	echo "[>] file.apk ready!"
-
-elif [ ! -z $1 ]&&[ $1 == "decode" ]; then
-	if [ -z "$2" ]; then
-    	echo "Pass the apk name!"
-    	echo "./apk decode <apkname.apk>"
-		exit
-	fi
-	APK_NAME=$2
-	APKTOOL_DECODE_OPTS="d $APK_NAME"
-#	APKTOOL_DECODE_OPTS="d -r -s $APK_NAME" # no disass dex
-#	APKTOOL_DECODE_OPTS="d -r $APK_NAME" # no decompile res
-	APKTOOL_DECODE_CMD="java -jar $APKTOOL_PATH $APKTOOL_DECODE_OPTS"
-	apk_decode "$APKTOOL_DECODE_CMD"
-
-elif [ ! -z $1 ]&&[ $1 == "patch" ]; then
-	# Frida gadget exposes a frida-server compatible interface, listening on localhost:27042 by default.
-	# run as soon as possible: frida -D emulator-5554 -n Gadget
-	#
 	arm=("armeabi" "armeabi-v7a")
 	arm64=("arm64-v8a" "arm64")
 	x86=("x86")
 	x86_64=("x86_64")
-	# supported_arch=("arm" "arm64" "x86" "x86_64")
-	supported_arch=("arm" "x86_64" "x86" "arm64")
 	GADGET_VER="15.1.28"
 	GADGET_ARM="frida-gadget-15.1.28-android-arm.so.xz"
 	GADGET_ARM64="frida-gadget-15.1.28-android-arm64.so.xz"
@@ -301,59 +151,7 @@ elif [ ! -z $1 ]&&[ $1 == "patch" ]; then
     #  'x86': 'x86',
 	#  'x86_64': 'x86_64',
 
-
-	if [ -z "$2" ]; then
-    	echo "Pass the apk name and the arch param!"
-    	echo "./apk patch <apkname.apk> --arch arm"
-		echo "[>] Bye!"
-		exit
-	fi
-	APK_NAME=$2
-	if [ ! -f "$APK_NAME" ]; then
-		echo "[!] apk $APK_NAME not found!"
-		echo "[>] Bye!"
-		exit
-	fi
-
-	if [ -z "$3" ]||[ "$3" != "--arch" ]; then
-    	echo "Pass the --arch param"
-    	echo "./apk patch <apkname.apk> --arch arm"
-		echo "[>] Bye!"
-		exit
-	fi
-	if [ -z "$4" ]; then
-    	echo "Specify the target CPU architecture"
-    	echo "./apk patch <apkname.apk> --arch arm"
-		echo "[>] Bye!"
-		exit
-	fi
-	ARCH=$4
-	if [[ ! "${supported_arch[*]}" =~ "${ARCH}" ]]; then
-		echo "[!] Architecture not supported!"
-		echo "[>] Bye!"
-		exit
-	fi
-
-	echo "<$5>"
-	# optional arg, if --gadget-conf exist:
-	if ! [ -z $5 ]; then
-		if	[ "$5" != "--gadget-conf" ]; then
-			echo $5
-			echo "Pass the --gadget-conf param"
-    		echo "./apk patch <apkname.apk> --arch arm --gadget-conf <file>"
-			echo "[>] Bye!"
-			exit
-		fi
-
-		GADGET_CONF_PATH=$6
-		if [ ! -f "$GADGET_CONF_PATH" ]; then
-			echo "[!] Gadget configuration json file ($GADGET_CONF_PATH) not found!"
-			echo "[>] Bye!"
-			exit
-		fi
-	fi
-
-		echo "[>] Injecting Frida gadget for $ARCH in $APK_NAME..."
+	echo "[>] Injecting Frida gadget for $ARCH in $APK_NAME..."
 
 	if [[ ${ARCH} == "arm"  ]]; then
 		GADGET=$GADGET_ARM
@@ -527,6 +325,217 @@ elif [ ! -z $1 ]&&[ $1 == "patch" ]; then
 	mv file.apk $APK_DIR.gadget.apk
 	echo "[>] $APK_DIR.gadget.apk ready!"
 	echo "[>] Bye!"
+}
+
+apk_pull(){
+	PACKAGE=$1
+	PACKAGE_PATH=`adb shell pm path $PACKAGE | cut -d ":" -f 2`
+	# TODO process output of adb shell pm to manage split APKs.
+	if [ -z "$PACKAGE_PATH" ]; then
+		echo "[>] Sorry, cant find package $PACKAGE"
+		echo "[>] Bye!"
+		exit
+	fi
+	NUM_APK=`echo "$PACKAGE_PATH" | wc -l`
+	if [ $NUM_APK -gt 1 ]; then
+		SPLIT_DIR=$PACKAGE"_split_apks"
+		mkdir -p $SPLIT_DIR 
+		echo "[>] Pulling $PACKAGE: Split apks detected!"
+		echo "[>] Pulling $NUM_APK apks in ./$SPLIT_DIR/"
+		print_ "[>] Pulling $PACKAGE from $PACKAGE_PATH<<<"
+		# todo CHECK IF adb cant pull
+		PULLED=`adb pull $PACKAGE_PATH $SPLIT_DIR`
+
+	#	We have to combine split APKs into a single APK, for patching. 
+		#	Decode all the APKs.
+		echo "[>] Combining split APKs into a single APK..."
+		SPLIT_APKS=($SPLIT_DIR/*)
+		for i in "${SPLIT_APKS[@]}"
+		do
+			print_ $i
+			APK_NAME=$i
+			APK_DIR=${APK_NAME%.apk} # bash 3.x compliant xD
+			APKTOOL_DECODE_OPTS="d $APK_NAME -o $APK_DIR"
+			APKTOOL_DECODE_CMD="java -jar $APKTOOL_PATH $APKTOOL_DECODE_OPTS"
+			apk_decode "$APKTOOL_DECODE_CMD 1>/dev/null"
+		done
+		#	Walk the extracted APKs dirs and copy files and dirs to the base APK dir. 
+		echo "[>] Walking extracted APKs dirs and copying files to the base APK..."
+		for i in "${SPLIT_APKS[@]}"
+		do
+			APK_NAME=$i
+			APK_DIR=${APK_NAME%.apk} # bash 3.x compliant xD
+
+			#	Skip base.apk.
+			if [ $APK_DIR == $SPLIT_DIR"/base" ]; then
+				continue
+			fi
+			# Walk each apk dir.
+			FILES_IN_SPLIT_APK=($APK_DIR/*)
+			for j in "${FILES_IN_SPLIT_APK[@]}"
+			do
+				print_ "[>>>>] Parsing split apks file: "$j
+				# Skip Manifest, apktool.yml, and the original files dir.
+				if [[ $j == *AndroidManifest.xml ]] || [[ $j == *apktool.yml ]] || [[ $j == *original ]]; then
+					print_ "[-] Skip!"
+					continue
+				fi
+				#	Copy files into the base APK, except for XML files in the res directory
+				if [[ $j == */res ]]; then
+					print_ "[.] /res direcorty found!":
+					(cd $j; find . -type f ! -name '*.xml' -exec cp --parents {} ../../base/res/ \; -exec echo '[+] Copying res that are not xml {}'\;)    
+					continue
+				fi
+				print_ "[>] Copying directory cp -R $j in $SPLIT_DIR/base/ ...."
+				cp -R $j $SPLIT_DIR"/base/"
+			done
+		done
+		echo "[>] Fixing APKTOOL_DUMMY public resource identifiers..."
+		#	Fix public resource identifiers. 
+		#	Find all resource IDs with name APKTOOOL_DUMMY_xxx in the base dir
+		DUMMY_IDS=`grep -r "APKTOOL_DUMMY_" $SPLIT_DIR"/base" | grep -Po "id=\"\K.*?(?=\")" | grep 0x`
+		stra=($DUMMY_IDS)
+		for j in "${stra[@]}"
+		do
+			print_ "[~] DUMMY_ID_TO_FIX: "$j
+			#	Get the dummy name grepping for the resource ID
+			DUMMY_NAME=`grep -r "$j" $SPLIT_DIR/base | grep DUMMY | grep -Po "name=\"\K.*?(?=\")"`
+			print_ "[~] DUMMY_NAME: "$DUMMY_NAME
+			#	Get the real resource name grepping for the resource ID in each spit APK
+			REAL_NAME=`grep -r "$j" $SPLIT_DIR | grep -v DUMMY | grep -v base | grep name | grep -Po "name=\"\K.*?(?=\")"`
+			print_ "[~] REAL_NAME: "$REAL_NAME
+			# Grep DUMMY_NAME and substitute the real resource name in the base dir
+			print_ "[~] File of base.apk with the DUMMY_NAME to update:"
+			#grep -r "\<$DUMMY_NAME\>" $SPLIT_DIR"/base" | grep "\.xml:"
+			grep -r "\<$DUMMY_NAME\>" $SPLIT_DIR"/base" | grep "\.xml:" | cut -d ":" -f 1 | xargs sed -i "s/\<$DUMMY_NAME\>/$REAL_NAME/g"
+			print_ "[~] Updated line:"
+			#grep -r "\<$REAL_NAME\>" $SPLIT_DIR"/base" | grep "\.xml:" 
+			print_ "---"
+		done
+		echo "[>] Done!"
+
+		#	Disable APK splitting in the base manifest file, if it’s not there already done.        
+		MANIFEST_PATH="$SPLIT_DIR/base/AndroidManifest.xml"
+		echo "[>] Disabling APK splitting (isSplitRequired=false) if it was set to true..."
+		sed -i "s/android:isSplitRequired=\"true\"/android:isSplitRequired=\"false\"/g" $MANIFEST_PATH
+		echo "[>] Done!"
+		#	Set android:extractNativeLibs="true" in the Manifest if you experience any adb: failed to install file.gadget.apk:
+		#	Failure [INSTALL_FAILED_INVALID_APK: Failed to extract native libraries, res=-2]
+		echo "[>] Enabling native libraries extraction if it was set to false..."
+		#	If the tag exist and is set to false, set it to true, otherwise do nothing
+		sed -i "s/android:extractNativeLibs=\"false\"/android:extractNativeLibs=\"true\"/g" $MANIFEST_PATH
+		echo "[>] Done!"
+		#	Rebuild the base APK 
+		APKTOOL_BUILD_OPTS="b -d $SPLIT_DIR"/base" -o file.apk --use-aapt2"
+		APKTOOL_BUILD_CMD="java -jar $APKTOOL_PATH $APKTOOL_BUILD_OPTS"
+		apk_build "$APKTOOL_BUILD_CMD"
+		mv file.apk file.single.apk
+		echo "[>] file.single.apk ready!"
+		echo "[>] Bye!"
+	else
+		echo "[>] Pulling $PACKAGE from $PACKAGE_PATH"
+		# todo CHECK IF adb cant pull
+		PULLED=`adb pull $PACKAGE_PATH $SPLIT_DIR`
+		echo "[>] Done!"
+		echo "[>] Bye!"
+	fi
+		}
+
+#####################################################################
+#####################################################################
+
+check_apk_tools 
+
+if [ ! -z $1 ]&&[ $1 == "build" ]; then
+	if [ -z "$2" ]; then
+    	echo "Pass the apk directory name!"
+    	echo "./apk build <apk_dir>"
+		exit
+	fi
+	#	
+	# It seems there is a problem with apktool build and manifest attribute android:dataExtractionRules 
+	# 	: /home/ax/AndroidManifest.xml:30: error: attribute android:dataExtractionRules not found.
+	# 	W: error: failed processing manifest.
+	# Temporary workaround: remove the attribute from the Manifest and use Android 9 
+	#
+	# Set android:extractNativeLibs="true" in the Manifest if you experience any adb:
+	# failed to install file.gadget.apk: Failure [INSTALL_FAILED_INVALID_APK: Failed to extract native libraries, res=-2]
+	# https://github.com/iBotPeaches/Apktool/issues/1626 - zipalign -p 4 seems to not resolve the issue.
+	#
+	APK_DIR=$2
+	APKTOOL_BUILD_OPTS="b -d $APK_DIR -o file.apk --use-aapt2"
+	APKTOOL_BUILD_CMD="java -jar $APKTOOL_PATH $APKTOOL_BUILD_OPTS"
+	#echo "[>] Building $APK_DIR with $APKTOOL_BUILD_CMD"
+	apk_build "$APKTOOL_BUILD_CMD"
+	echo "[>] file.apk ready!"
+
+elif [ ! -z $1 ]&&[ $1 == "decode" ]; then
+	if [ -z "$2" ]; then
+    	echo "Pass the apk name!"
+    	echo "./apk decode <apkname.apk>"
+		exit
+	fi
+	APK_NAME=$2
+	APKTOOL_DECODE_OPTS="d $APK_NAME"
+	#APKTOOL_DECODE_OPTS="d -r -s $APK_NAME" # no disass dex
+	#APKTOOL_DECODE_OPTS="d -r $APK_NAME" # no decompile res
+	APKTOOL_DECODE_CMD="java -jar $APKTOOL_PATH $APKTOOL_DECODE_OPTS"
+	apk_decode "$APKTOOL_DECODE_CMD"
+
+elif [ ! -z $1 ]&&[ $1 == "patch" ]; then
+		
+	if [ -z "$2" ]; then
+    	echo "Pass the apk name and the arch param!"
+    	echo "./apk patch <apkname.apk> --arch arm"
+		echo "[>] Bye!"
+		exit
+	fi
+	APK_NAME=$2
+	if [ ! -f "$APK_NAME" ]; then
+		echo "[!] apk $APK_NAME not found!"
+		echo "[>] Bye!"
+		exit
+	fi
+
+	if [ -z "$3" ]||[ "$3" != "--arch" ]; then
+    	echo "Pass the --arch param"
+    	echo "./apk patch <apkname.apk> --arch arm"
+		echo "[>] Bye!"
+		exit
+	fi
+	if [ -z "$4" ]; then
+    	echo "Specify the target CPU architecture"
+    	echo "./apk patch <apkname.apk> --arch arm"
+		echo "[>] Bye!"
+		exit
+	fi
+	ARCH=$4
+	if [[ ! "${supported_arch[*]}" =~ "${ARCH}" ]]; then
+		echo "[!] Architecture not supported!"
+		echo "[>] Bye!"
+		exit
+	fi
+
+	# optional arg, if --gadget-conf exist:
+	if ! [ -z $5 ]; then
+		if	[ "$5" != "--gadget-conf" ]; then
+			echo $5
+			echo "Pass the --gadget-conf param"
+    		echo "./apk patch <apkname.apk> --arch arm --gadget-conf <file>"
+			echo "[>] Bye!"
+			exit
+		fi
+
+		GADGET_CONF_PATH=$6
+		if [ ! -f "$GADGET_CONF_PATH" ]; then
+			echo "[!] Gadget configuration json file ($GADGET_CONF_PATH) not found!"
+			echo "[>] Bye!"
+			exit
+		fi
+	fi
+
+	apk_patch $APK_NAME $ARCH $GADGET_CONF_PATH
+
 elif [ ! -z $1 ]&&[ $1 == "pull" ]; then
 	if [ -z "$2" ]; then
     	echo "Pass the package name!"
@@ -536,10 +545,11 @@ elif [ ! -z $1 ]&&[ $1 == "pull" ]; then
 	PACKAGE_NAME=$2
 	apk_pull "$PACKAGE_NAME"
 else
-    echo "./apk build <apk_dir>"
-	echo "./apk decode <apk_name.apk>"
-	echo "./apk patch <apk_name.apk> --arch arm"
-	echo "./apk patch <apk_name.apk> --arch x86_64 --gadget-conf libfrida-gadget.config.so"
-	echo "[>] First arg must be build, decode or patch!"
+	echo "[>] First arg must be build, decode, pull or patch!"
+    echo " ./apk pull <package_name>"
+    echo " ./apk build <apk_dir>"
+	echo " ./apk decode <apk_name.apk>"
+	echo " ./apk patch <apk_name.apk> --arch arm"
+	echo " ./apk patch <apk_name.apk> --arch x86_64 --gadget-conf gadget-config.json"
 	exit
 fi
