@@ -211,7 +211,7 @@ apk_patch(){
 	# Search the class in smali_classesN directories. 
 	CLASS_PATH_IND=1 # starts from 2
 	# get max number of smali_classes
-    CLASS_PATH_IND_MAX=$(ls -1 "./$APK_DIR" | grep "_classes[1-9]*" | wc -l)
+    CLASS_PATH_IND_MAX=$(ls -1 "./$APK_DIR" | grep "_classes[0-9]*" | wc -l)
 	while [ ! -f "$CLASS_PATH" ]
 	do
 		echo "[!] $CLASS_PATH does not exist! Probably a multidex APK..."
