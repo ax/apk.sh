@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# apk.sh v0.9.8
+# apk.sh v0.9.9
 # author: ax - github.com/ax
 #
 # References:
@@ -9,7 +9,7 @@
 # https://github.com/NickstaDB/patch-apk
 #
 
-VERSION="0.9.8"
+VERSION="0.9.9"
 echo -e "[*] \033[1mapk.sh v$VERSION \033[0m"
 
 APK_SH_HOME="${HOME}/.apk.sh"
@@ -137,10 +137,10 @@ apk_patch(){
 	x86=("x86")
 	x86_64=("x86_64")
 	GADGET_VER="15.1.28"
-	GADGET_ARM="frida-gadget-15.1.28-android-arm.so.xz"
-	GADGET_ARM64="frida-gadget-15.1.28-android-arm64.so.xz"
-	GADGET_X86_64="frida-gadget-15.1.28-android-x86_64.so.xz"
-	GADGET_X86="frida-gadget-15.1.28-android-x86.so.xz"
+	GADGET_ARM="frida-gadget-$GADGET_VER-android-arm.so.xz"
+	GADGET_ARM64="frida-gadget-$GADGET_VER-android-arm64.so.xz"
+	GADGET_X86_64="frida-gadget-$GADGET_VER-android-x86_64.so.xz"
+	GADGET_X86="frida-gadget-$GADGET_VER-android-x86.so.xz"
 	#GADGET_X86_64="frida-gadget-15.2.2-android-x86_64.so.xz"
 
 	#  folder:arch
@@ -173,7 +173,7 @@ apk_patch(){
 		if [ ! -f "$FRIDA_SO_XZ" ]; then
 			echo "[!] Frida gadget not present in $APK_SH_HOME"
 			echo "[>] Downloading latest frida gadget for $ARCH from github.com..."
-			wget https://github.com/frida/frida/releases/download/15.1.28/$GADGET -q --show-progress -P $APK_SH_HOME 
+			wget https://github.com/frida/frida/releases/download/$GADGET_VER/$GADGET -q --show-progress -P $APK_SH_HOME 
 		fi
 		unxz "$FRIDA_SO_XZ"
 	else
@@ -211,12 +211,11 @@ apk_patch(){
 	# Search the class in smali_classesN directories. 
 	CLASS_PATH_IND=1 # starts from 2
 	# get max number of smali_classes
-	MAX_INDEX=$(ls -1 "./$APK_DIR" | grep smali_classes | grep -Eo '[0-9]' | sort -n -r | head -n 1 | awk '{print $1-1}')
+    CLASS_PATH_IND_MAX=$(ls -1 "./$APK_DIR" | grep "_classes[1-9]*" | wc -l)
 	while [ ! -f "$CLASS_PATH" ]
 	do
 		echo "[!] $CLASS_PATH does not exist! Probably a multidex APK..."
-		if [ $CLASS_PATH_IND -gt $MAX_INDEX ] 2>/dev/null
-		then
+		if [ $CLASS_PATH_IND -gt $CLASS_PATH_IND_MAX ]; then
 			# keep searching until smali_classesN then exit
 			echo "[>] $CLASS_PATH NOT FOUND!"
 			echo "[!] Can't find the launchable-activity! Sorry."
@@ -386,7 +385,7 @@ apk_pull(){
 				#	Copy files into the base APK, except for XML files in the res directory
 				if [[ $j == */res ]]; then
 					print_ "[.] /res direcorty found!":
-					(cd $j; find . -type f ! -name '*.xml' -exec cp --parents {} ../../base/res/ \; -exec echo '[+] Copying res that are not xml {}'\;)    
+					(cd $j; find . -type f ! -name '*.xml' -exec cp --parents {} ../../base/res/ \;)# -exec echo '[+] Copying res that are not xml {}'\;)    
 					continue
 				fi
 				print_ "[>] Copying directory cp -R $j in $SPLIT_DIR/base/ ...."
