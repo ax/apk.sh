@@ -210,11 +210,14 @@ apk_patch(){
 	# NOTE: if the class does not exist it might be a multidex setup.
 	# Search the class in smali_classesN directories. 
 	CLASS_PATH_IND=1 # starts from 2
+	# get max number of smali_classes
+	MAX_INDEX=$(ls -1 "./$APK_DIR" | grep smali_classes | grep -Eo '[0-9]' | sort -n -r | head -n 1 | awk '{print $1-1}')
 	while [ ! -f "$CLASS_PATH" ]
 	do
 		echo "[!] $CLASS_PATH does not exist! Probably a multidex APK..."
-		if [ $CLASS_PATH_IND -gt 2 ]; then
-			# keep searching until smali_classes3 then exit
+		if [ $CLASS_PATH_IND -gt $MAX_INDEX ] 2>/dev/null
+		then
+			# keep searching until smali_classesN then exit
 			echo "[>] $CLASS_PATH NOT FOUND!"
 			echo "[!] Can't find the launchable-activity! Sorry."
 			echo "[>] Bye!"
