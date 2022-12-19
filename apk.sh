@@ -12,7 +12,8 @@
 VERSION="0.9.9"
 echo -e "[*] \033[1mapk.sh v$VERSION \033[0m"
 
-APK_SH_HOME="${HOME}/.apk.sh"
+# Use $XDG_DATA_HOME if set, $HOME if not set
+APK_SH_HOME="${XDG_DATA_HOME-$HOME}/.apk.sh"
 mkdir -p $APK_SH_HOME
 echo "[*] home dir is $APK_SH_HOME"
 
