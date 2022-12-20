@@ -205,8 +205,9 @@ apk_patch(){
 	fi
 
 	FRIDA_SO_XZ="$APK_SH_HOME/$GADGET"
+	FRIDA_SO="${FRIDA_SO_XZ::${#FRIDA_SO_XZ}-3}"
 
-	if [ ! -f "${FRIDA_SO_XZ::-3}" ]; then
+	if [ ! -f "$FRIDA_SO" ]; then
 		if [ ! -f "$FRIDA_SO_XZ" ]; then
 			echo "[!] Frida gadget not present in $APK_SH_HOME"
 			echo "[>] Downloading latest frida gadget for $ARCH from github.com..."
@@ -216,7 +217,7 @@ apk_patch(){
 	else
 		echo "[>] Frida gadget already present in $APK_SH_HOME"
 	fi
-	echo "[>] Using ${FRIDA_SO_XZ::-3}"
+	echo "[>] Using $FRIDA_SO"
 
 	APKTOOL_DECODE_OPTS="d $APK_NAME"
 	APKTOOL_DECODE_CMD="java -jar $APKTOOL_PATH $APKTOOL_DECODE_OPTS"
@@ -225,7 +226,7 @@ apk_patch(){
 	echo "[>] Placing the frida shared object for $ARCH...."
 	APK_DIR=${APK_NAME%.apk} # bash 3.x compliant xD
 	mkdir -p "$APK_DIR/lib/$ARCH_DIR/"
-	cp ${FRIDA_SO_XZ::-3} $APK_DIR/lib/$ARCH_DIR/libfrida-gadget.so
+	cp $FRIDA_SO $APK_DIR/lib/$ARCH_DIR/libfrida-gadget.so
 	if [ ! -z $GADGET_CONF_PATH ]; then
 		echo "[>] Placing the specified gadget configuration json file...."
 		cp "$GADGET_CONF_PATH" $APK_DIR/lib/$ARCH_DIR/libfrida-gadget.config.so
