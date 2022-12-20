@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# apk.sh v0.9.9
+# apk.sh v1.0
 # author: ax - github.com/ax
 #
 # References:
@@ -9,7 +9,7 @@
 # https://github.com/NickstaDB/patch-apk
 #
 
-VERSION="0.9.9"
+VERSION="1.0"
 echo -e "[*] \033[1mapk.sh v$VERSION \033[0m"
 
 APK_SH_HOME="${HOME}/.apk.sh"
@@ -27,6 +27,38 @@ print_ "[*] DEBUG is TRUE"
 APKTOOL_VER="2.7.0"
 APKTOOL_PATH="$APK_SH_HOME/apktool_$APKTOOL_VER.jar"
 
+BUILDTOOLS_VER="33.0.1"
+SDK_ROOT="$APK_SH_HOME/sdk_root"
+BUILD_TOOLS="$SDK_ROOT/build-tools/$BUILDTOOLS_VER"
+APKSIGNER="$BUILD_TOOLS/apksigner"
+ZIPALIGN="$BUILD_TOOLS/zipalign"
+AAPT="$BUILD_TOOLS/aapt"
+
+install_buildtools(){
+	CMDLINE_TOOLS_DOWNLOAD_URL="https://dl.google.com/android/repository/commandlinetools-linux-9123335_latest.zip"
+	CMDLINE_TOOLS_DIR="$APK_SH_HOME/cmdline-tools"
+	if [ ! -d "$CMDLINE_TOOLS_DIR" ]; then
+		echo "[>] Downloading Android commandline tools from $CMDLINE_TOOLS_DOWNLOAD_URL"
+		wget $CMDLINE_TOOLS_DOWNLOAD_URL -q --show-progress -P $APK_SH_HOME 
+		unzip $APK_SH_HOME/commandlinetools-linux-9123335_latest.zip -d $APK_SH_HOME
+		rm $APK_SH_HOME/commandlinetools-linux-9123335_latest.zip 
+	fi
+	SDK_MANAGER_BIN="$CMDLINE_TOOLS_DIR/bin/sdkmanager"
+	mkdir -p $SDK_ROOT
+	INSTALL_BUILDTOOLS_CMD="echo -ne 'y\n' | $SDK_MANAGER_BIN 'build-tools;$BUILDTOOLS_VER' --sdk_root=$SDK_ROOT"
+	echo -e "[>] Installing build-tools $BUILDTOOLS_VER..."
+	if ! eval $INSTALL_BUILDTOOLS_CMD; then 
+		echo "[>] Sorry!"
+		echo "[!] $INSTALL_BUILDTOOLS_CMD return errors!"
+		echo "[>] Bye!"
+		exit
+	fi
+	APKSIGNER="$BUILD_TOOLS/apksigner"
+	ZIPALIGN="$BUILD_TOOLS/zipalign"
+	AAPT="$BUILD_TOOLS/aapt"
+	echo "[>] Done!"
+}
+
 check_apk_tools(){
 	if [ -f "$APKTOOL_PATH" ]; then
 		echo "[*] apktool v$APKTOOL_VER exist in $APK_SH_HOME"
@@ -39,41 +71,46 @@ check_apk_tools(){
 		wget $APKTOOL_DOWNLOAD_URL -q --show-progress -P $APK_SH_HOME 
 	fi
 	if  is_not_installed 'apksigner'; then
-		echo "[>] No apksigner found!"
-		echo "[>] Pls install apksigner!"
-		exit
+		if [ ! -f "$APKSIGNER" ]; then
+			echo "[!] No apksigner found in path!"
+			echo "[!] No apksigner found in $APK_SH_HOME"
+			install_buildtools
+			echo "[>] apksigner installed!"
+		else
+			echo "[*] apksigner v`$APKSIGNER --version` exist in $BUILD_TOOLS"
+		fi
 	fi
 	if  is_not_installed 'zipalign'; then
-		echo "[>] No zipalign found!"
-		echo "[>] Pls install zipalign!"
-		exit
+		if [ ! -f "$ZIPALIGN" ]; then
+			install_buildtools
+			echo "[>] zipalign installed!"
+		else
+			echo "[*] zipalign exist in $BUILD_TOOLS"
+		fi
 	fi
 	if  is_not_installed 'aapt'; then
-		echo "[>] No aapt found!"
-		echo "[>] Pls install aapt!"
-		exit
+		if [ ! -f "$AAPT" ]; then
+			install_buildtools
+			echo "[>] aapt installed!"
+		else
+			echo "[*] aapt exist in $BUILD_TOOLS"
+		fi
 	fi
 	if  is_not_installed 'unxz'; then
 		echo "[>] No unxz found!"
 		echo "[>] Pls install unxz!"
 		exit
 	fi
-	if  is_not_installed 'adb'; then
-		echo "[>] No adb found!"
-		echo "[>] Pls install adb!"
+	if  is_not_installed 'unzip'; then
+		echo "[>] No unzip found!"
+		echo "[>] Pls install unzip!"
 		exit
 	fi
 	return 0
 }
 
-is_installed () {
-	if [ ! -z `which $1` ]; then
-		return 0
-	fi
-}
-
 is_not_installed () {
-	if [ -z `which $1` ]; then
+	if [ -z `command -v $1 2>/dev/null` ]; then
 		return 0
 	fi
 		return 1
@@ -104,7 +141,7 @@ apk_build(){
 	fi
 	echo "[>] Built!"
 	echo "[>] Aligning with zipalign -p 4 ...."
-	zipalign -p 4 file.apk file-aligned.apk
+	$ZIPALIGN -p 4 file.apk file-aligned.apk
 	echo "[>] Done!"
 
 	KS="$APK_SH_HOME/my-new.keystore"
@@ -116,7 +153,7 @@ apk_build(){
 		echo "[>] A Keystore exist!"
 	fi
 	echo "[>] Signing file.apk with apksigner..."
-	apksigner sign --ks $KS --ks-pass pass:password file-aligned.apk
+	$APKSIGNER sign --ks $KS --ks-pass pass:password file-aligned.apk
 	#jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore my-new.keystore -storepass "password" file.apk alias_name
 	rm file.apk
 	mv file-aligned.apk file.apk
@@ -200,7 +237,7 @@ apk_patch(){
 	# We have to determine the class name for the activity that is launched on application startup.
 	# In Objection this is done by first trying to parse the output of aapt dump badging, then falling back to manually parsing the AndroidManifest for activity-alias tags.
 	echo "[>] Searching for a launchable-activity..."
-	MAIN_ACTIVITY=`aapt dump badging $APK_NAME | grep launchable-activity | grep -Po "name='\K.*?(?=')"`
+	MAIN_ACTIVITY=`$AAPT dump badging $APK_NAME | grep launchable-activity | grep -Po "name='\K.*?(?=')"`
 	echo "[>] launchable-activity found --> $MAIN_ACTIVITY"
 	# TODO: If we dont get the activity, we gonna check out activity aliases trying to manually parse the AndroidManifest.
 	# Try to determine the local path for a target class' smali converting the main activity to a path
@@ -330,6 +367,12 @@ apk_patch(){
 }
 
 apk_pull(){
+	if  is_not_installed 'adb'; then
+		echo "[>] No adb found!"
+		echo "[>] Pls install adb!"
+		echo "[>] Bye!"
+		exit
+	fi
 	PACKAGE=$1
 	PACKAGE_PATH=`adb shell pm path $PACKAGE | cut -d ":" -f 2`
 	# TODO process output of adb shell pm to manage split APKs.
