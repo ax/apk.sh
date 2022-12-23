@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# apk.sh v1.0.1
+# apk.sh v1.0.2
 # author: ax - github.com/ax
 #
 # References:
@@ -9,7 +9,7 @@
 # https://github.com/NickstaDB/patch-apk
 #
 
-VERSION="1.0.1"
+VERSION="1.0.2"
 echo -e "[*] \033[1mapk.sh v$VERSION \033[0m"
 
 APK_SH_HOME="${HOME}/.apk.sh"
@@ -119,7 +119,6 @@ is_not_installed() {
 }
 
 run(){
-	echo "[---] Running $1"
 	if ! eval "$1"; then
 		echo "[>] Sorry!"
 		echo "[!] $1 return errors!"
@@ -206,8 +205,9 @@ apk_patch(){
 	fi
 
 	FRIDA_SO_XZ="$APK_SH_HOME/$GADGET"
+	FRIDA_SO="${FRIDA_SO_XZ%???}"
 
-	if [ ! -f "${FRIDA_SO_XZ::-3}" ]; then
+	if [ ! -f "$FRIDA_SO" ]; then
 		if [ ! -f "$FRIDA_SO_XZ" ]; then
 			echo "[!] Frida gadget not present in $APK_SH_HOME"
 			echo "[>] Downloading latest frida gadget for $ARCH from github.com..."
@@ -217,7 +217,7 @@ apk_patch(){
 	else
 		echo "[>] Frida gadget already present in $APK_SH_HOME"
 	fi
-	echo "[>] Using ${FRIDA_SO_XZ::-3}"
+	echo "[>] Using $FRIDA_SO"
 
 	APKTOOL_DECODE_OPTS="d $APK_NAME"
 	APKTOOL_DECODE_CMD="java -jar $APKTOOL_PATH $APKTOOL_DECODE_OPTS"
