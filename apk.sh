@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# apk.sh v1.0
+# apk.sh v1.0.1
 # author: ax - github.com/ax
 #
 # References:
@@ -9,7 +9,7 @@
 # https://github.com/NickstaDB/patch-apk
 #
 
-VERSION="1.0"
+VERSION="1.0.1"
 echo -e "[*] \033[1mapk.sh v$VERSION \033[0m"
 
 APK_SH_HOME="${HOME}/.apk.sh"
@@ -30,9 +30,16 @@ APKTOOL_PATH="$APK_SH_HOME/apktool_$APKTOOL_VER.jar"
 BUILDTOOLS_VER="33.0.1"
 SDK_ROOT="$APK_SH_HOME/sdk_root"
 BUILD_TOOLS="$SDK_ROOT/build-tools/$BUILDTOOLS_VER"
-APKSIGNER="$BUILD_TOOLS/apksigner"
-ZIPALIGN="$BUILD_TOOLS/zipalign"
-AAPT="$BUILD_TOOLS/aapt"
+
+if [ ! -d "$BUILD_TOOLS" ]; then
+	APKSIGNER="apksigner"
+	ZIPALIGN="zipalign"
+	AAPT="aapt"
+else
+	APKSIGNER="$BUILD_TOOLS/apksigner"
+	ZIPALIGN="$BUILD_TOOLS/zipalign"
+	AAPT="$BUILD_TOOLS/aapt"
+fi
 
 install_buildtools(){
 	CMDLINE_TOOLS_DOWNLOAD_URL="https://dl.google.com/android/repository/commandlinetools-linux-9123335_latest.zip"
@@ -47,12 +54,7 @@ install_buildtools(){
 	mkdir -p $SDK_ROOT
 	INSTALL_BUILDTOOLS_CMD="echo -ne 'y\n' | $SDK_MANAGER_BIN 'build-tools;$BUILDTOOLS_VER' --sdk_root=$SDK_ROOT"
 	echo -e "[>] Installing build-tools $BUILDTOOLS_VER..."
-	if ! eval $INSTALL_BUILDTOOLS_CMD; then 
-		echo "[>] Sorry!"
-		echo "[!] $INSTALL_BUILDTOOLS_CMD return errors!"
-		echo "[>] Bye!"
-		exit
-	fi
+	run "$INSTALL_BUILDTOOLS_CMD"
 	APKSIGNER="$BUILD_TOOLS/apksigner"
 	ZIPALIGN="$BUILD_TOOLS/zipalign"
 	AAPT="$BUILD_TOOLS/aapt"
@@ -109,39 +111,38 @@ check_apk_tools(){
 	return 0
 }
 
-is_not_installed () {
+is_not_installed() {
 	if [ -z `command -v $1 2>/dev/null` ]; then
 		return 0
 	fi
 		return 1
 }
 
-apk_decode(){
-	DECODE_CMD=$1
-	echo -e "[>] \033[1mDecoding $APK_NAME\033[0m with $DECODE_CMD"
-	if ! eval $DECODE_CMD; then 
+run(){
+	echo "[---] Running $1"
+	if ! eval "$1"; then
 		echo "[>] Sorry!"
-		echo "[!] $DECODE_CMD return errors!"
+		echo "[!] $1 return errors!"
 		echo "[>] Bye!"
 		exit
 	fi
+}
+
+apk_decode(){
+	DECODE_CMD="$1"
+	echo -e "[>] \033[1mDecoding $APK_NAME\033[0m with $DECODE_CMD"
+	run "$DECODE_CMD"
 	echo "[>] Done!"
 }
 
 
 apk_build(){
-	BUILD_CMD=$1
+	BUILD_CMD="$1"
 	echo -e "[>] \033[1mBuilding\033[0m with $BUILD_CMD"
-
-	if ! eval $BUILD_CMD; then
-		echo "[>] Sorry!"
-		echo "[!] $BUILD_CMD return errors!"
-		echo "[>] Bye!"
-		exit
-	fi
+	run "$BUILD_CMD"
 	echo "[>] Built!"
 	echo "[>] Aligning with zipalign -p 4 ...."
-	$ZIPALIGN -p 4 file.apk file-aligned.apk
+	run "$ZIPALIGN -p 4 file.apk file-aligned.apk"
 	echo "[>] Done!"
 
 	KS="$APK_SH_HOME/my-new.keystore"
@@ -374,7 +375,8 @@ apk_pull(){
 		exit
 	fi
 	PACKAGE=$1
-	PACKAGE_PATH=`adb shell pm path $PACKAGE | cut -d ":" -f 2`
+	PACKAGE_PATH=`adb shell pm path "$PACKAGE" | cut -d ":" -f 2 | tr -d '\n' | tr -d '\r'`
+
 	# TODO process output of adb shell pm to manage split APKs.
 	if [ -z "$PACKAGE_PATH" ]; then
 		echo "[>] Sorry, cant find package $PACKAGE"
@@ -388,10 +390,10 @@ apk_pull(){
 		echo "[>] Pulling $PACKAGE: Split apks detected!"
 		echo "[>] Pulling $NUM_APK apks in ./$SPLIT_DIR/"
 		print_ "[>] Pulling $PACKAGE from $PACKAGE_PATH<<<"
-		# todo CHECK IF adb cant pull
-		PULLED=`adb pull $PACKAGE_PATH $SPLIT_DIR`
-
-	#	We have to combine split APKs into a single APK, for patching. 
+		PULL_CMD="adb pull $PACKAGE_PATH $SPLIT_DIR"
+		run "$PULL_CMD"
+		
+		#	We have to combine split APKs into a single APK, for patching. 
 		#	Decode all the APKs.
 		echo "[>] Combining split APKs into a single APK..."
 		SPLIT_APKS=($SPLIT_DIR/*)
@@ -479,12 +481,12 @@ apk_pull(){
 		echo "[>] Bye!"
 	else
 		echo "[>] Pulling $PACKAGE from $PACKAGE_PATH"
-		# todo CHECK IF adb cant pull
-		PULLED=`adb pull $PACKAGE_PATH $SPLIT_DIR`
+		PULL_CMD="adb pull $PACKAGE_PATH ."
+		run "$PULL_CMD"
 		echo "[>] Done!"
 		echo "[>] Bye!"
 	fi
-		}
+}
 
 #####################################################################
 #####################################################################
