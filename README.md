@@ -78,7 +78,7 @@ var android_log_write = new NativeFunction(
     ['int', 'pointer', 'pointer']
 );
 
-var tag = Memory.allocUtf8String("[frida-sript][ax]");
+var tag = Memory.allocUtf8String("[frida-script][ax]");
 
 
 
