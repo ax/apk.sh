@@ -102,6 +102,8 @@ android_log_write(3, tag, Memory.allocUtf8String(">--(O.o)-<"));
 ### Note
 Add the following code to print to logcat the `console.log` output of any script from the [frida codeshare](https://codeshare.frida.re/) when using the Script interaction type.
 ```js
+// print to logcat the console.log output
+// see: https://github.com/frida/frida/issues/382
 var android_log_write = new NativeFunction(
     Module.getExportByName(null, '__android_log_write'),
     'int',
