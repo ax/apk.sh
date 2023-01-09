@@ -58,6 +58,8 @@ The default configuration is:
 
 You can pass the gadget configuration file to `apk.sh` with the `--gadget-conf` option.
 
+### Script interaction
+
 A typically suggested configuration might be:
 ```json
 {
@@ -78,9 +80,7 @@ var android_log_write = new NativeFunction(
     ['int', 'pointer', 'pointer']
 );
 
-var tag = Memory.allocUtf8String("[frida-sript][ax]");
-
-
+var tag = Memory.allocUtf8String("[frida-script][ax]");
 
 var work = function() {
     setTimeout(function() {
@@ -88,12 +88,9 @@ var work = function() {
         work();
     }, 1000);
 }
+
 work();
 
-// console.log does not seems to work. see: https://github.com/frida/frida/issues/382
-console.log("console.log");
-console.error("console.error");
-console.warn("WARN");
 android_log_write(3, tag, Memory.allocUtf8String(">--(O.o)-<"));
 ```
 `adb push script.js /data/local/tmp`
@@ -101,6 +98,20 @@ android_log_write(3, tag, Memory.allocUtf8String(">--(O.o)-<"));
 `./apk.sh patch <apk_name> --arch arm --gadget-conf <config.json>`
 
 `adb install file.gadget.apk`
+
+### Note
+Add the following code to print to logcat the `console.log` output of any script from the [frida codeshare](https://codeshare.frida.re/) when using the Script interaction type.
+```js
+var android_log_write = new NativeFunction(
+    Module.getExportByName(null, '__android_log_write'),
+    'int',
+    ['int', 'pointer', 'pointer']
+);
+var tag = Memory.allocUtf8String("[frida-script][ax]");
+console.log = function(str) {
+    android_log_write(3, tag, Memory.allocUtf8String(str));
+}
+```
 
 ## Requirements
 
