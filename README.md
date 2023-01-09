@@ -94,7 +94,7 @@ work();
 console.log("console.log");
 console.error("console.error");
 console.warn("WARN");
-android_log_write(3, tag, Memory.allocUtf8String(">--(O.o)-<)");
+android_log_write(3, tag, Memory.allocUtf8String(">--(O.o)-<"));
 ```
 `adb push script.js /data/local/tmp`
 
