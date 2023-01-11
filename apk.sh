@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# apk.sh v1.0.2
+# apk.sh v1.0.3
 # author: ax - github.com/ax
 #
 # References:
@@ -9,7 +9,7 @@
 # https://github.com/NickstaDB/patch-apk
 #
 
-VERSION="1.0.2"
+VERSION="1.0.3"
 echo -e "[*] \033[1mapk.sh v$VERSION \033[0m"
 
 APK_SH_HOME="${HOME}/.apk.sh"
@@ -127,6 +127,14 @@ run(){
 	fi
 }
 
+exit_if_not_exist(){
+	if [ ! -f "$1" ]; then
+		echo "[!] File $1 not found!"
+		echo "[>] Bye!"
+		exit
+	fi
+}
+
 apk_decode(){
 	DECODE_CMD="$1"
 	echo -e "[>] \033[1mDecoding $APK_NAME\033[0m with $DECODE_CMD"
@@ -162,8 +170,8 @@ apk_build(){
 
 
 apk_patch(){
-# Frida gadget exposes a frida-server compatible interface, listening on localhost:27042 by default.
-# run as soon as possible: frida -D emulator-5554 -n Gadget
+	# Frida gadget exposes a frida-server compatible interface, listening on localhost:27042 by default.
+	# run as soon as possible: frida -D emulator-5554 -n Gadget
 
 	APK_NAME=$1
 	ARCH=$2
@@ -205,7 +213,7 @@ apk_patch(){
 	fi
 
 	FRIDA_SO_XZ="$APK_SH_HOME/$GADGET"
-	FRIDA_SO="${FRIDA_SO_XZ%???}"
+	FRIDA_SO="${FRIDA_SO_XZ%???}" # bash 3.x compliant xD
 
 	if [ ! -f "$FRIDA_SO" ]; then
 		if [ ! -f "$FRIDA_SO_XZ" ]; then
@@ -352,7 +360,7 @@ apk_patch(){
 		echo "[>] Patching $MANIFEST_PATH"
 		arr=("${manifest[@]:0:1}") 			# start of the array
 		arr+=( '<uses-permission android:name="android.permission.INTERNET"/>')
-		arr+=( "${manifest[@]:2}" ) 		# tail of the array
+		arr+=( "${manifest[@]:1}" ) 		# tail of the array
         manifest=("${arr[@]}")     		# transfer back in the original array.
 		echo "[>] Writing the patched manifest back..."
 		printf "%s\n" "${manifest[@]}" > $MANIFEST_PATH
@@ -488,6 +496,26 @@ apk_pull(){
 	fi
 }
 
+apk_rename(){
+	APK_NAME=$1
+	PACKAGE=$2
+	echo -e "[>] \033[1mRenaming $APK_NAME\033[0m to $PACKAGE"
+	APKTOOL_DECODE_OPTS="d $APK_NAME"
+	APKTOOL_DECODE_CMD="java -jar $APKTOOL_PATH $APKTOOL_DECODE_OPTS"
+	apk_decode "$APKTOOL_DECODE_CMD 1>/dev/null"
+	APK_DIR=${APK_NAME%.apk} # bash 3.x compliant xD
+	APKTOOL_YML_PATH="$APK_DIR/apktool.yml"
+	echo "[>] Updating renameManifestPackage in apktool.yml with $PACKAGE"
+	# Note: https://github.com/iBotPeaches/Apktool/issues/1753
+	# renameManifestPackage is not designed for manual package name changes, but can be useful in some situations.
+	sed -i "s/renameManifestPackage:.*/renameManifestPackage: $PACKAGE/g" $APKTOOL_YML_PATH
+	APKTOOL_BUILD_OPTS="b -d $APK_DIR -o file.apk --use-aapt2"
+	APKTOOL_BUILD_CMD="java -jar $APKTOOL_PATH $APKTOOL_BUILD_OPTS"
+	apk_build "$APKTOOL_BUILD_CMD 1>/dev/null"
+	mv file.apk file.renamed.apk
+	echo "[>] file.renamed.apk ready!"
+}
+
 #####################################################################
 #####################################################################
 
@@ -523,6 +551,7 @@ elif [ ! -z $1 ]&&[ $1 == "decode" ]; then
 		exit
 	fi
 	APK_NAME=$2
+	exit_if_not_exist "$APK_NAME"
 	APKTOOL_DECODE_OPTS="d $APK_NAME"
 	#APKTOOL_DECODE_OPTS="d -r -s $APK_NAME" # no disass dex
 	#APKTOOL_DECODE_OPTS="d -r $APK_NAME" # no decompile res
@@ -538,12 +567,8 @@ elif [ ! -z $1 ]&&[ $1 == "patch" ]; then
 		exit
 	fi
 	APK_NAME=$2
-	if [ ! -f "$APK_NAME" ]; then
-		echo "[!] apk $APK_NAME not found!"
-		echo "[>] Bye!"
-		exit
-	fi
-
+	exit_if_not_exist "$APK_NAME"
+	
 	if [ -z "$3" ]||[ "$3" != "--arch" ]; then
     	echo "Pass the --arch param"
     	echo "./apk patch <apkname.apk> --arch arm"
@@ -591,6 +616,24 @@ elif [ ! -z $1 ]&&[ $1 == "pull" ]; then
 	fi
 	PACKAGE_NAME=$2
 	apk_pull "$PACKAGE_NAME"
+
+elif [ ! -z $1 ]&&[ $1 == "rename" ]; then
+	if [ -z "$2" ]; then
+    	echo "Pass the apk name!"
+    	echo "./apk rename <apkname.apk> <com.package.name>"
+		exit
+	fi
+	APK_NAME=$2
+	exit_if_not_exist "$APK_NAME"
+	if [ -z "$3" ]; then
+    	echo "Pass the package name"
+    	echo "./apk rename <apkname.apk> <com.package.name>"
+		echo "[>] Bye!"
+		exit
+	fi
+	PACKAGE_NAME=$3
+	apk_rename "$APK_NAME" "$PACKAGE_NAME"
+
 else
 	echo "[>] First arg must be build, decode, pull or patch!"
     echo " ./apk pull <package_name>"
