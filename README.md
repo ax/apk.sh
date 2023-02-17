@@ -125,8 +125,7 @@ console.log = function(str) {
 - adb
 
 ## Usage 
-```
-SYNOPSIS
+### SYNOPSIS
 	apk.sh [SUBCOMMAND] [APK FILE|APK DIR|PKG NAME] [FLAGS]
 	apk.sh pull [PKG NAME] [FLAGS]
 	apk.sh decode [APK FILE] [FLAGS]
@@ -134,29 +133,24 @@ SYNOPSIS
 	apk.sh patch [APK FILE] [FLAGS]
 	apk.sh rename [APK FILE] [PKG NAME] [FLAGS]
 
- SUBCOMMANDS
+ ### SUBCOMMANDS
 	pull	Pull an apk from device/emulator.
 	decode	Decode an apk.
 	build	Re-build an apk.
 	patch	Patch an apk.
 	rename	Rename the apk package.
 
- FLAGS
-	-a, --arch <arch>	Specify the target architecture, mandatory when patching.
+ ### FLAGS
+`-a, --arch <arch>` Specify the target architecture, mandatory when patching.
 
-	-g, --gadget-conf <json_file>	
-				Specify a frida-gadget configuration file, optional when patching.
+`-g, --gadget-conf <json_file>` Specify a frida-gadget configuration file, optional when patching.
 
-	-n, --net		Add a permissive network security config when building, optional.
-				It can be used with patch, pull and rename also.
+`-n, --net` Add a permissive network security config when building, optional. It can be used with patch, pull and rename also.
 
-	-s, --safe		Do not decode resources when decoding (i.e. apktool -r).
-				Cannot be used when patching.
+`-s, --safe` Do not decode resources when decoding (i.e. apktool -r). Cannot be used when patching.
 
-	-d, --no-dis		Do not disassemble dex, optional when decoding (i.e. apktool -s).
-				Cannot be used when patching.
+`-d, --no-dis` Do not disassemble dex, optional when decoding (i.e. apktool -s). Cannot be used when patching.
 
-```
 
 ## :page_with_curl: Links of Interest
 https://frida.re/docs/gadget/
