@@ -431,7 +431,7 @@ apk_pull(){
 	fi
 	PACKAGE=$1
 	BUILD_OPTS=$2
-	PACKAGE_PATH=`adb shell pm path "$PACKAGE" | cut -d ":" -f 2`
+	PACKAGE_PATH=`adb shell pm path "$PACKAGE" | sed 's/\r//' | cut -d ":" -f 2`
 
 	if [ -z "$PACKAGE_PATH" ]; then
 		echo "[>] Sorry, cant find package $PACKAGE"
