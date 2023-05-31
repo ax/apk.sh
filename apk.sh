@@ -60,6 +60,8 @@ BUILDTOOLS_VER="33.0.1"
 SDK_ROOT="$APK_SH_HOME/sdk_root"
 BUILD_TOOLS="$SDK_ROOT/build-tools/$BUILDTOOLS_VER"
 
+GADGET_VER="16.0.19"
+
 if [ ! -d "$BUILD_TOOLS" ]; then
 	APKSIGNER="apksigner"
 	ZIPALIGN="zipalign"
@@ -229,7 +231,6 @@ apk_patch(){
 	arm64=("arm64-v8a" "arm64")
 	x86=("x86")
 	x86_64=("x86_64")
-	GADGET_VER="15.1.28"
 	GADGET_ARM="frida-gadget-$GADGET_VER-android-arm.so.xz"
 	GADGET_ARM64="frida-gadget-$GADGET_VER-android-arm64.so.xz"
 	GADGET_X86_64="frida-gadget-$GADGET_VER-android-x86_64.so.xz"
