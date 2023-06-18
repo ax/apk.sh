@@ -702,11 +702,16 @@ elif [ ! -z $1 ]&&[ $1 == "patch" ]; then
 
 elif [ ! -z $1 ]&&[ $1 == "pull" ]; then
 	if [ -z "$2" ]; then
-    	echo "Pass the package name!"
-    	echo "./apk pull <com.package.name>"
-		exit 1
+		if is_not_installed 'fzf'; then
+			echo "Pass the package name!"
+			echo "./apk pull <com.package.name>"
+			exit 1
+		else
+			PACKAGE_NAME=`adb shell pm list packages | sed 's/\r//' | cut -d ":" -f 2 | fzf`
+		fi
+	else
+		PACKAGE_NAME=$2
 	fi
-	PACKAGE_NAME=$2
 	APKTOOL_BUILD_OPTS=""
 	if [ ! -z "$3" ]&&[ "$3" == "--net" ]; then
 		APKTOOL_BUILD_OPTS="$APKTOOL_BUILD_OPTS -n"
