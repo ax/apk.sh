@@ -229,7 +229,11 @@ apk_patch(){
 	arm64=("arm64-v8a" "arm64")
 	x86=("x86")
 	x86_64=("x86_64")
-	GADGET_VER="15.1.28"
+	if is_not_installed 'jq'; then
+		GADGET_VER="15.1.28"
+	else
+		GADGET_VER=`wget https://api.github.com/repos/frida/frida/releases/latest -q -O - | jq -r .tag_name`
+	fi
 	GADGET_ARM="frida-gadget-$GADGET_VER-android-arm.so.xz"
 	GADGET_ARM64="frida-gadget-$GADGET_VER-android-arm64.so.xz"
 	GADGET_X86_64="frida-gadget-$GADGET_VER-android-x86_64.so.xz"
