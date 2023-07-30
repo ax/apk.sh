@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# apk.sh v1.0.5
+# apk.sh v1.0.6
 # author: ax - github.com/ax
 #
 # -----------------------------------------------------------------------------
@@ -38,7 +38,7 @@
 # -----------------------------------------------------------------------------
 #
 
-VERSION="1.0.5"
+VERSION="1.0.6"
 echo -e "[*] \033[1mapk.sh v$VERSION \033[0m"
 
 APK_SH_HOME="${HOME}/.apk.sh"
@@ -53,7 +53,7 @@ print_(){
 }
 print_ "[*] DEBUG is TRUE"
 
-APKTOOL_VER="2.7.0"
+APKTOOL_VER=`wget https://api.github.com/repos/iBotPeaches/Apktool/releases/latest -q -O - | grep -Po "tag_name\": \"v\K.*?(?=\")"`
 APKTOOL_PATH="$APK_SH_HOME/apktool_$APKTOOL_VER.jar"
 
 BUILDTOOLS_VER="33.0.1"
