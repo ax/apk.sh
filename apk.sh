@@ -735,6 +735,10 @@ elif [ ! -z $1 ]&&[ $1 == "rename" ]; then
 	apk_rename "$APK_NAME" "$PACKAGE_NAME" "$APKTOOL_BUILD_OPTS"
 	exit 0
 
+elif [ ! -z $1 ]&&[ $1 == "init" ]; then
+	echo "Initialized."
+	exit 0
+
 else
 	echo "[!] First arg must be build, decode, pull, rename or patch!"
     echo " ./apk.sh pull <package_name>"

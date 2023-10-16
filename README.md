@@ -151,6 +151,14 @@ console.log = function(str) {
 
 `-d, --no-dis` Do not disassemble dex, optional when decoding (i.e. apktool -s). Cannot be used when patching.
 
+## Docker
+
+To use with docker :
+
+```
+docker build --tag apk.sh:latest .
+docker run --device=/dev/bus/usb -v ./:/wd apk.sh [SUBCOMMAND]
+```
 
 ## :page_with_curl: Links of Interest
 https://frida.re/docs/gadget/
