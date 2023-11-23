@@ -520,8 +520,11 @@ apk_pull(){
 
 		# Disable APK splitting in the base manifest file, if it’s not there already done.        
 		MANIFEST_PATH="$SPLIT_DIR/base/AndroidManifest.xml"
-		echo "[>] Disabling APK splitting (isSplitRequired=false) if it was set to true..."
+		echo "[>] Disabling APK splitting :"
+  		echo "[>] - Make sure isSplitRequired is set to false"
 		sed -i "s/android:isSplitRequired=\"true\"/android:isSplitRequired=\"false\"/g" $MANIFEST_PATH
+  		echo "[>] - Make sure com.android.vending.splits.required is set to false"
+  		sed -i "/com.android.vending.splits.required/s/true/false/g" $MANIFEST_PATH
 		echo "[>] Done!"
 		#	Set android:extractNativeLibs="true" in the Manifest if you experience any adb: failed to install file.gadget.apk:
 		#	Failure [INSTALL_FAILED_INVALID_APK: Failed to extract native libraries, res=-2]
