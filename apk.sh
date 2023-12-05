@@ -460,7 +460,7 @@ apk_pull(){
 			print_ $i
 			APK_NAME=$i
 			APK_DIR=${APK_NAME%.apk} # bash 3.x compliant xD
-			APKTOOL_DECODE_OPTS="-o $APK_DIR 1>/dev/null"
+			APKTOOL_DECODE_OPTS="--resource-mode dummy -o $APK_DIR 1>/dev/null"
 			apk_decode "$APK_NAME" "$APKTOOL_DECODE_OPTS"
 		done
 		# Walk the extracted APKs dirs and copy files and dirs to the base APK dir. 
@@ -495,27 +495,31 @@ apk_pull(){
 			done
 		done
 		echo "[>] Fixing APKTOOL_DUMMY public resource identifiers..."
+		echo "[>] - Find all public DUMMY_NAME/REAL_NAME pairs ..."
+
 		# Fix public resource identifiers. 
 		# Find all resource IDs with name APKTOOOL_DUMMY_xxx in the base dir
-		DUMMY_IDS=`grep -r "APKTOOL_DUMMY_" $SPLIT_DIR"/base" | grep -Po "id=\"\K.*?(?=\")" | grep 0x`
+		DUMMY_IDS=`grep "APKTOOL_DUMMY_" $SPLIT_DIR"/base/res/values/public.xml" | grep -Po "id=\"\K.*?(?=\")" | grep 0x`
 		stra=($DUMMY_IDS)
+		ITER=1
+		TOTAL=${#stra[@]}
+		touch $SPLIT_DIR"/DUMMY_REPLACEMENT.txt"
 		for j in "${stra[@]}"
 		do
-			print_ "[~] DUMMY_ID_TO_FIX: "$j
+			print_ "[~] ("$ITER"/"$TOTAL") DUMMY_ID_TO_FIX: "$j
 			# Get the dummy name grepping for the resource ID
-			DUMMY_NAME=`grep -r "$j" $SPLIT_DIR/base | grep DUMMY | grep -Po "name=\"\K.*?(?=\")"`
-			print_ "[~] DUMMY_NAME: "$DUMMY_NAME
+			DUMMY_NAME=`grep "$j" $SPLIT_DIR/base/res/values/public.xml | grep DUMMY | grep -Po "name=\"\K.*?(?=\")"`
+			print_ "[~] ("$ITER"/"$TOTAL") DUMMY_NAME: "$DUMMY_NAME
 			# Get the real resource name grepping for the resource ID in each spit APK
-			REAL_NAME=`grep -r "$j" $SPLIT_DIR | grep -v DUMMY | grep -v base | grep name | grep -Po "name=\"\K.*?(?=\")"`
-			print_ "[~] REAL_NAME: "$REAL_NAME
-			# Grep DUMMY_NAME and substitute the real resource name in the base dir
-			print_ "[~] File of base.apk with the DUMMY_NAME to update:"
-			#grep -r "\<$DUMMY_NAME\>" $SPLIT_DIR"/base" | grep "\.xml:"
-			grep -r "\<$DUMMY_NAME\>" $SPLIT_DIR"/base" | grep "\.xml:" | cut -d ":" -f 1 | xargs sed -i "s/\<$DUMMY_NAME\>/$REAL_NAME/g"
-			print_ "[~] Updated line:"
-			#grep -r "\<$REAL_NAME\>" $SPLIT_DIR"/base" | grep "\.xml:" 
+			REAL_NAME=`grep "$j" $SPLIT_DIR/*/res/values/public.xml | grep -v DUMMY | grep -v base | grep name | grep -Po "name=\"\K.*?(?=\")"`
+			print_ "[~] ("$ITER"/"$TOTAL") REAL_NAME: "$REAL_NAME
+			echo "s/\<$DUMMY_NAME\>/$REAL_NAME/g" >> $SPLIT_DIR"/DUMMY_REPLACEMENT.txt"
 			print_ "---"
+			ITER=$(expr $ITER + 1)
 		done
+		echo "[>] - Replace DUMMY_NAME/REAL_NAME in all base.apk xml files containing APKTOOL_DUMMY_"
+		grep -rl "APKTOOL_DUMMY_" --include "*\.xml" $SPLIT_DIR"/base" | xargs sed -i -f $SPLIT_DIR"/DUMMY_REPLACEMENT.txt"
+		rm $SPLIT_DIR"/DUMMY_REPLACEMENT.txt"
 		echo "[>] Done!"
 
 		# Disable APK splitting in the base manifest file, if it’s not there already done.        
