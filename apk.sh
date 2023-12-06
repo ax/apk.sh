@@ -59,6 +59,8 @@ APKTOOL_PATH="$APK_SH_HOME/apktool_$APKTOOL_VER.jar"
 BUILDTOOLS_VER="33.0.1"
 SDK_ROOT="$APK_SH_HOME/sdk_root"
 BUILD_TOOLS="$SDK_ROOT/build-tools/$BUILDTOOLS_VER"
+PLATFORM_TOOLS="$SDK_ROOT/platform-tools"
+
 
 if [ ! -d "$BUILD_TOOLS" ]; then
 	APKSIGNER="apksigner"
@@ -69,15 +71,26 @@ else
 	ZIPALIGN="$BUILD_TOOLS/zipalign"
 	AAPT="$BUILD_TOOLS/aapt"
 fi
+if [ ! -d "$PLATFORM_TOOLS" ]; then
+        ADB="adb"
+else
+        ADB="$PLATFORM_TOOLS/adb"
+fi
+
+CMDLINE_TOOLS_DIR="$APK_SH_HOME/cmdline-tools"
+
+install_cmdlinetools() {
+	CMDLINE_TOOLS_DOWNLOAD_URL="https://dl.google.com/android/repository/commandlinetools-linux-9123335_latest.zip"
+        echo "[>] Downloading Android commandline tools from $CMDLINE_TOOLS_DOWNLOAD_URL"
+        wget $CMDLINE_TOOLS_DOWNLOAD_URL -q --show-progress -P $APK_SH_HOME
+        unzip $APK_SH_HOME/commandlinetools-linux-9123335_latest.zip -d $APK_SH_HOME
+        rm $APK_SH_HOME/commandlinetools-linux-9123335_latest.zip
+	echo "[>] Done!"
+}
 
 install_buildtools(){
-	CMDLINE_TOOLS_DOWNLOAD_URL="https://dl.google.com/android/repository/commandlinetools-linux-9123335_latest.zip"
-	CMDLINE_TOOLS_DIR="$APK_SH_HOME/cmdline-tools"
 	if [ ! -d "$CMDLINE_TOOLS_DIR" ]; then
-		echo "[>] Downloading Android commandline tools from $CMDLINE_TOOLS_DOWNLOAD_URL"
-		wget $CMDLINE_TOOLS_DOWNLOAD_URL -q --show-progress -P $APK_SH_HOME 
-		unzip $APK_SH_HOME/commandlinetools-linux-9123335_latest.zip -d $APK_SH_HOME
-		rm $APK_SH_HOME/commandlinetools-linux-9123335_latest.zip 
+		install_cmdlinetools
 	fi
 	SDK_MANAGER_BIN="$CMDLINE_TOOLS_DIR/bin/sdkmanager"
 	mkdir -p $SDK_ROOT
@@ -89,6 +102,20 @@ install_buildtools(){
 	AAPT="$BUILD_TOOLS/aapt"
 	echo "[>] Done!"
 }
+
+install_platformtools(){
+	if [ ! -d "$CMDLINE_TOOLS_DIR" ]; then
+                install_cmdlinetools
+        fi
+        SDK_MANAGER_BIN="$CMDLINE_TOOLS_DIR/bin/sdkmanager"
+        mkdir -p $SDK_ROOT
+	INSTALL_PLATFORMTOOLS_CMD="echo -ne 'y\n' | $SDK_MANAGER_BIN 'platform-tools' --sdk_root=$SDK_ROOT"
+        echo -e "[>] Installing platform-tools ..."
+	run "$INSTALL_PLATFORMTOOLS_CMD"
+        ADB="$PLATFORM_TOOLS/adb"
+	echo "[>] Done!"
+}
+
 
 check_apk_tools(){
 	if [ -f "$APKTOOL_PATH" ]; then
@@ -127,6 +154,14 @@ check_apk_tools(){
 			echo "[*] aapt exist in $BUILD_TOOLS"
 		fi
 	fi
+	if  is_not_installed 'adb'; then
+                if [ ! -f "$ADB" ]; then
+                        install_platformtools
+                        echo "[>] adb installed!"
+                else
+                        echo "[*] adb exist in $PLATFORM_TOOLS"
+                fi
+        fi
 	if  is_not_installed 'unxz'; then
 		echo "[>] No unxz found!"
 		echo "[>] Pls install unxz!"
@@ -423,15 +458,9 @@ apk_patch(){
 }
 
 apk_pull(){
-	if  is_not_installed 'adb'; then
-		echo "[>] No adb found!"
-		echo "[>] Pls install adb!"
-		echo "[>] Bye!"
-		exit 1
-	fi
 	PACKAGE=$1
 	BUILD_OPTS=$2
-	PACKAGE_PATH=`adb shell pm path "$PACKAGE" | sed 's/\r//' | cut -d ":" -f 2`
+	PACKAGE_PATH=`$ADB shell pm path "$PACKAGE" | sed 's/\r//' | cut -d ":" -f 2`
 
 	if [ -z "$PACKAGE_PATH" ]; then
 		echo "[>] Sorry, cant find package $PACKAGE"
@@ -448,7 +477,7 @@ apk_pull(){
 
 		for P in $PACKAGE_PATH
 		do
-			PULL_CMD="adb pull $P $SPLIT_DIR"
+			PULL_CMD="$ADB pull $P $SPLIT_DIR"
 			run "$PULL_CMD"
 		done
 		# We have to combine split APKs into a single APK, for patching. 
@@ -544,7 +573,7 @@ apk_pull(){
 		return 0
 	else
 		echo "[>] Pulling $PACKAGE from $PACKAGE_PATH"
-		PULL_CMD="adb pull $PACKAGE_PATH ."
+		PULL_CMD="$ADB pull $PACKAGE_PATH ."
 		run "$PULL_CMD"
 		echo "[>] Done!"
 		echo "[>] Bye!"
