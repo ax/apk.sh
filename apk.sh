@@ -228,6 +228,12 @@ apk_build(){
 	echo -e "[>] \033[1mBuilding\033[0m with $BUILD_CMD"
 	run "$BUILD_CMD"
 	echo "[>] Built!"
+	apk_sign "$APK_NAME"
+	return 0
+}
+
+apk_sign() {
+	APK_NAME="$1"
 	echo "[>] Aligning with zipalign -p 4 ...."
 	run "$ZIPALIGN -p 4 $APK_NAME $APK_NAME-aligned.apk"
 	echo "[>] Done!"
@@ -771,6 +777,18 @@ elif [ ! -z $1 ]&&[ $1 == "rename" ]; then
 	apk_rename "$APK_NAME" "$PACKAGE_NAME" "$APKTOOL_BUILD_OPTS"
 	exit 0
 
+elif [ ! -z $1 ]&&[ $1 == "sign" ]; then
+	if [ -z "$2" ]; then
+		echo "Pass the apk name!"
+		echo "./apk sign <apkname.apk>"
+		echo "[>] Bye!"
+		exit 1
+	fi
+	APK_NAME=$2
+	exit_if_not_exist "$APK_NAME"
+	apk_sign "$APK_NAME"
+	exit 0
+
 else
 	echo "[!] First arg must be build, decode, pull, rename or patch!"
     echo " ./apk.sh pull <package_name>"
@@ -778,6 +796,7 @@ else
     echo " ./apk.sh build <apk_dir>"
 	echo " ./apk.sh patch <apk_file> --arch arm"
     echo " ./apk.sh rename <apk_file> <package_name>"
+    echo " ./apk.sh sign <apk_file>"
 	echo "[>] Bye!"
 	exit 1
 fi
