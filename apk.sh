@@ -311,8 +311,7 @@ apk_patch(){
 	fi
 	echo "[>] Using $FRIDA_SO"
 
-	# If the flag --only-main-classes is passed, add the flag --only-main-classes to the apktool build command.
-	APKTOOL_DECODE_OPTS=""
+	APKTOOL_DECODE_OPTS=DECODE_OPTS
 	apk_decode "$APK_NAME" "$APKTOOL_DECODE_OPTS"
 
 	echo -e "[>] \033[1mInjecting Frida gadget...\033[0m"
