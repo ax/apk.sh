@@ -38,6 +38,8 @@ Patching an APK is simple as running  `./apk.sh patch <apk_name> --arch arm`.
 
 You can calso specify a Frida gadget configuration in a json `./apk.sh patch <apk_name> --arch arm --gadget-conf <config.json>`
 
+If you encounter "already interned" `apktool d` errors like in [#30](https://github.com/ax/apk.sh/issues/30), you can pass the `--only-main-classes` flag, which will be passed to `apktool` when decoding your APK.
+
 ## :mushroom: Frida's Gadget configurations
 In the default interaction, Frida Gadget exposes a frida-server compatible interface, listening on localhost:27042 by default. In order to achieve early instrumentation Frida let Gadget’s constructor function block until you either `attach()` to the process, or call `resume()` after going through the usual `spawn()` -> `attach()` -> `...apply instrumentation...` steps.
 

@@ -35,6 +35,8 @@
 #	-d, --no-dis		Do not disassemble dex, optional when decoding (i.e. apktool -s).
 #				Cannot be used when patching.
 #
+#	--only-main-classes	Only disassemble the main dex classes, optional when decoding with apktool (i.e. apktool d --only-main-classes).
+#
 # -----------------------------------------------------------------------------
 #
 
