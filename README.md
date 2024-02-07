@@ -3,7 +3,7 @@ apk.sh is a Bash script that makes reverse engineering Android apps easier, auto
 
 
 ## Features
-apk.sh basically uses [apktool](https://ibotpeaches.github.io/Apktool/) to disassemble, decode and rebuild resources and some bash to automate the [frida](https://https://frida.re/) gadget injection process.
+apk.sh basically uses [apktool](https://ibotpeaches.github.io/Apktool/) to disassemble, decode and rebuild resources and some bash to automate the [frida](https://frida.re/) gadget injection process.
 It also supports app bundles/split APKs. 
 
  -  :mushroom: Patching APKs to load frida-gadget.so on start.
