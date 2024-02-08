@@ -366,7 +366,7 @@ apk_patch(){
 	
 	#
 	# Now, patch the smali, look for the line with the apktool's comment "# direct methods" 
-	# Patch the smali with the appropriate loadLibrary call based on wether a constructor already exists or not.
+	# Patch the smali with the appropriate loadLibrary call based on whether a constructor already exists or not.
 	# If an existing constructor is present, the partial_load_library will be used.
 	# If no constructor is present, the full_load_library will be used.
 	#
@@ -391,7 +391,7 @@ apk_patch(){
 				echo "[>>] A constructor is already present --> ${lines[$index+1]}"
 				echo "[>>] Injecting partial load library!"
 				# Skip  any .locals and write after
-				# Do we have to skip .annotaions? is ok to write before them?
+				# Do we have to skip .annotations? is ok to write before them?
 				if [[ ${lines[$index+2]} =~ \.locals* ]]; then
 					echo "[>>] .locals declaration found!"
 					echo "[>>] Skipping .locals line..."
@@ -405,7 +405,7 @@ apk_patch(){
 					echo "[!!!!!!] TODO add .locals line"
 				fi
 				arr=("${lines[@]:0:$index+1+$skip}") 			# start of the array
-				# We inject a loadLibrary just after the locals delcaration.
+				# We inject a loadLibrary just after the locals declaration.
 				# Objection add the loadLibrary call just before the method end.
 				arr+=( 'const-string v0, "frida-gadget"')
 				arr+=( 'invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V')
@@ -428,7 +428,7 @@ apk_patch(){
 		fi
 		((index++))
 	done
-	echo "[>] Writing the pathced smali back..."
+	echo "[>] Writing the patched smali back..."
 	printf "%s\n" "${lines[@]}" > $CLASS_PATH
 	
 	# Add the Internet permission to the manifest if it’s not there already, to permit Frida gadget to open a socket.
