@@ -3,7 +3,7 @@ apk.sh is a Bash script that makes reverse engineering Android apps easier, auto
 
 
 ## Features
-apk.sh basically uses [apktool](https://ibotpeaches.github.io/Apktool/) to disassemble, decode and rebuild resources and some bash to automate the [frida](https://https://frida.re/) gadget injection process.
+apk.sh basically uses [apktool](https://ibotpeaches.github.io/Apktool/) to disassemble, decode and rebuild resources and some bash to automate the [frida](https://frida.re/) gadget injection process.
 It also supports app bundles/split APKs. 
 
  -  :mushroom: Patching APKs to load frida-gadget.so on start.
@@ -58,6 +58,8 @@ The default configuration is:
 
 You can pass the gadget configuration file to `apk.sh` with the `--gadget-conf` option.
 
+### Script interaction
+
 A typically suggested configuration might be:
 ```json
 {
@@ -80,27 +82,38 @@ var android_log_write = new NativeFunction(
 
 var tag = Memory.allocUtf8String("[frida-script][ax]");
 
-
-
 var work = function() {
     setTimeout(function() {
         android_log_write(3, tag, Memory.allocUtf8String("ping @ " + Date.now()));
         work();
     }, 1000);
 }
+
 work();
 
-// console.log does not seems to work. see: https://github.com/frida/frida/issues/382
-console.log("console.log");
-console.error("console.error");
-console.warn("WARN");
-android_log_write(3, tag, Memory.allocUtf8String(">--(O.o)-<)");
+android_log_write(3, tag, Memory.allocUtf8String(">--(O.o)-<"));
 ```
 `adb push script.js /data/local/tmp`
 
 `./apk.sh patch <apk_name> --arch arm --gadget-conf <config.json>`
 
 `adb install file.gadget.apk`
+
+### Note
+Add the following code to print to logcat the `console.log` output of any script from the [frida codeshare](https://codeshare.frida.re/) when using the Script interaction type.
+```js
+// print to logcat the console.log output
+// see: https://github.com/frida/frida/issues/382
+var android_log_write = new NativeFunction(
+    Module.getExportByName(null, '__android_log_write'),
+    'int',
+    ['int', 'pointer', 'pointer']
+);
+var tag = Memory.allocUtf8String("[frida-script][ax]");
+console.log = function(str) {
+    android_log_write(3, tag, Memory.allocUtf8String(str));
+}
+```
 
 ## Requirements
 
@@ -110,6 +123,33 @@ android_log_write(3, tag, Memory.allocUtf8String(">--(O.o)-<)");
 - zipalign
 - aapt
 - adb
+
+## Usage 
+### SYNOPSIS
+	apk.sh [SUBCOMMAND] [APK FILE|APK DIR|PKG NAME] [FLAGS]
+	apk.sh pull [PKG NAME] [FLAGS]
+	apk.sh decode [APK FILE] [FLAGS]
+	apk.sh build [APK DIR] [FLAGS]
+	apk.sh patch [APK FILE] [FLAGS]
+	apk.sh rename [APK FILE] [PKG NAME] [FLAGS]
+
+ ### SUBCOMMANDS
+	pull	Pull an apk from device/emulator.
+	decode	Decode an apk.
+	build	Re-build an apk.
+	patch	Patch an apk.
+	rename	Rename the apk package.
+
+ ### FLAGS
+`-a, --arch <arch>` Specify the target architecture, mandatory when patching.
+
+`-g, --gadget-conf <json_file>` Specify a frida-gadget configuration file, optional when patching.
+
+`-n, --net` Add a permissive network security config when building, optional. It can be used with patch, pull and rename also.
+
+`-s, --safe` Do not decode resources when decoding (i.e. apktool -r). Cannot be used when patching.
+
+`-d, --no-dis` Do not disassemble dex, optional when decoding (i.e. apktool -s). Cannot be used when patching.
 
 
 ## :page_with_curl: Links of Interest
