@@ -53,7 +53,7 @@ print_(){
 }
 print_ "[*] DEBUG is TRUE"
 
-APKTOOL_VER=`wget https://api.github.com/repos/iBotPeaches/Apktool/releases/latest -q -O - | grep -Po "tag_name\": \"v\K.*?(?=\")"`
+APKTOOL_VER=`wget https://api.github.com/repos/iBotPeaches/Apktool/releases/latest -q -O - | sed -nE 's/.*"tag_name": "v([^"]+)".*/\1/p'`
 APKTOOL_PATH="$APK_SH_HOME/apktool_$APKTOOL_VER.jar"
 
 BUILDTOOLS_VER="33.0.1"
