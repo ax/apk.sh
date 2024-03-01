@@ -218,7 +218,7 @@ apk_build(){
 	BUILD_CMD_OPTS="$2"
 	BUILD_CMD_START="java -jar $APKTOOL_PATH b -d "
 	BUILD_CMD="$BUILD_CMD_START $APK_DIR $BUILD_CMD_OPTS"
-	APK_NAME=`echo $BUILD_CMD_OPTS | grep -Po "\-o \K.*?(?= )"`
+	APK_NAME=`echo $BUILD_CMD_OPTS | sed -nE 's/.*\-o ([^ ]+).*/\1/p'`
 	if [ -z $APK_NAME ]; then
 		APK_NAME="$APK_DIR.apk"
 	fi
@@ -270,7 +270,7 @@ apk_patch(){
 	arm64=("arm64-v8a" "arm64")
 	x86=("x86")
 	x86_64=("x86_64")
-	GADGET_VER=`wget https://api.github.com/repos/frida/frida/releases/latest -q -O - | grep -Po "tag_name\": \"\K.*?(?=\")"`
+	GADGET_VER=`wget https://api.github.com/repos/frida/frida/releases/latest -q -O - | sed -nE 's/.*tag_name": "([^"]+)".*/\1/p'`
 	GADGET_ARM="frida-gadget-$GADGET_VER-android-arm.so.xz"
 	GADGET_ARM64="frida-gadget-$GADGET_VER-android-arm64.so.xz"
 	GADGET_X86_64="frida-gadget-$GADGET_VER-android-x86_64.so.xz"
@@ -335,7 +335,7 @@ apk_patch(){
 	# We have to determine the class name for the activity that is launched on application startup.
 	# In Objection this is done by first trying to parse the output of aapt dump badging, then falling back to manually parsing the AndroidManifest for activity-alias tags.
 	echo "[>] Searching for a launchable-activity..."
-	MAIN_ACTIVITY=`$AAPT dump badging $APK_NAME | grep launchable-activity | grep -Po "name='\K.*?(?=')"`
+	MAIN_ACTIVITY=`$AAPT dump badging $APK_NAME | grep launchable-activity | sed -nE "s/.*name='([^']+).*/\1/p"`
 	echo "[>] launchable-activity found --> $MAIN_ACTIVITY"
 	# TODO: If we dont get the activity, we gonna check out activity aliases trying to manually parse the AndroidManifest.
 	# Try to determine the local path for a target class' smali converting the main activity to a path
@@ -534,7 +534,7 @@ apk_pull(){
 
 		# Fix public resource identifiers. 
 		# Find all resource IDs with name APKTOOOL_DUMMY_xxx in the base dir
-		DUMMY_IDS=`grep "APKTOOL_DUMMY_" $SPLIT_DIR"/base/res/values/public.xml" | grep -Po "id=\"\K.*?(?=\")" | grep 0x`
+		DUMMY_IDS=`grep "APKTOOL_DUMMY_" $SPLIT_DIR"/base/res/values/public.xml" | sed -nE 's/.*id="([^"]+)".*/\1/p' | grep 0x`
 		stra=($DUMMY_IDS)
 		ITER=1
 		TOTAL=${#stra[@]}
@@ -543,10 +543,10 @@ apk_pull(){
 		do
 			print_ "[~] ("$ITER"/"$TOTAL") DUMMY_ID_TO_FIX: "$j
 			# Get the dummy name grepping for the resource ID
-			DUMMY_NAME=`grep "$j" $SPLIT_DIR/base/res/values/public.xml | grep DUMMY | grep -Po "name=\"\K.*?(?=\")"`
+			DUMMY_NAME=`grep "$j" $SPLIT_DIR/base/res/values/public.xml | grep DUMMY | sed -nE 's/.*name="([^"]+)".*/\1/p'`
 			print_ "[~] ("$ITER"/"$TOTAL") DUMMY_NAME: "$DUMMY_NAME
 			# Get the real resource name grepping for the resource ID in each spit APK
-			REAL_NAME=`grep "$j" $SPLIT_DIR/*/res/values/public.xml | grep -v DUMMY | grep -v base | grep name | grep -Po "name=\"\K.*?(?=\")"`
+			REAL_NAME=`grep "$j" $SPLIT_DIR/*/res/values/public.xml | grep -v DUMMY | grep -v base | grep name | sed -nE 's/.*name="([^"]+)".*/\1/p'`
 			print_ "[~] ("$ITER"/"$TOTAL") REAL_NAME: "$REAL_NAME
 			echo "s/\<$DUMMY_NAME\>/$REAL_NAME/g" >> $SPLIT_DIR"/DUMMY_REPLACEMENT.txt"
 			print_ "---"
