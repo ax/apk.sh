@@ -35,6 +35,8 @@
 #	-d, --no-dis		Do not disassemble dex, optional when decoding (i.e. apktool -s).
 #				Cannot be used when patching.
 #
+#	--only-main-classes	Only disassemble the main dex classes, optional when decoding with apktool (i.e. apktool d --only-main-classes).
+#
 # -----------------------------------------------------------------------------
 #
 
@@ -265,6 +267,7 @@ apk_patch(){
 	ARCH=$2
 	GADGET_CONF_PATH=$3
 	BUILD_OPTS=$4
+	DECODE_OPTS=$5
 
 	arm=("armeabi" "armeabi-v7a")
 	arm64=("arm64-v8a" "arm64")
@@ -316,7 +319,7 @@ apk_patch(){
 	fi
 	echo "[>] Using $FRIDA_SO"
 
-	APKTOOL_DECODE_OPTS=""
+	APKTOOL_DECODE_OPTS=DECODE_OPTS
 	apk_decode "$APK_NAME" "$APKTOOL_DECODE_OPTS"
 
 	echo -e "[>] \033[1mInjecting Frida gadget...\033[0m"
@@ -697,6 +700,7 @@ elif [ ! -z $1 ]&&[ $1 == "patch" ]; then
 	APK_NAME=$2
 	APKTOOL_BUILD_OPTS=""
 	GADGET_CONF_PATH=""
+	APKTOOL_DECODE_OPTS=""
 	exit_if_not_exist "$APK_NAME"
 	shift # pop SUBCOMMAND
 	shift # pop SUBCOMMAND_ARG
@@ -718,6 +722,10 @@ elif [ ! -z $1 ]&&[ $1 == "patch" ]; then
 		  		APKTOOL_BUILD_OPTS="$APKTOOL_BUILD_OPTS -n"
 		  		shift # argument
 		  	;;
+			--only-main-classes)
+		  		APKTOOL_DECODE_OPTS="$APKTOOL_DECODE_OPTS --only-main-classes"
+		  		shift # argument
+		  	;;		
 			-*|--*)
 		  		echo "[!] Unknown option $1"
 		  		exit 1
@@ -739,7 +747,7 @@ elif [ ! -z $1 ]&&[ $1 == "patch" ]; then
 		echo "[>] Bye!"
 		exit 1
 	fi
-	apk_patch "$APK_NAME" "$ARCH" "$GADGET_CONF_PATH" "$APKTOOL_BUILD_OPTS"
+	apk_patch "$APK_NAME" "$ARCH" "$GADGET_CONF_PATH" "$APKTOOL_BUILD_OPTS" "$APKTOOL_DECODE_OPTS"
 	exit 0
 
 elif [ ! -z $1 ]&&[ $1 == "pull" ]; then
