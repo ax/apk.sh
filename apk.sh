@@ -319,7 +319,7 @@ apk_patch(){
 	fi
 	echo "[>] Using $FRIDA_SO"
 
-	APKTOOL_DECODE_OPTS=DECODE_OPTS
+	APKTOOL_DECODE_OPTS=$DECODE_OPTS
 	apk_decode "$APK_NAME" "$APKTOOL_DECODE_OPTS"
 
 	echo -e "[>] \033[1mInjecting Frida gadget...\033[0m"
