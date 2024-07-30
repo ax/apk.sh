@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# apk.sh v1.0.8
+# apk.sh v1.0.9
 # author: ax - github.com/ax
 #
 # -----------------------------------------------------------------------------
@@ -40,7 +40,7 @@
 # -----------------------------------------------------------------------------
 #
 
-VERSION="1.0.8"
+VERSION="1.0.9"
 echo -e "[*] \033[1mapk.sh v$VERSION \033[0m"
 
 APK_SH_HOME="${HOME}/.apk.sh"
@@ -319,7 +319,7 @@ apk_patch(){
 	fi
 	echo "[>] Using $FRIDA_SO"
 
-	APKTOOL_DECODE_OPTS=DECODE_OPTS
+	APKTOOL_DECODE_OPTS=$DECODE_OPTS
 	apk_decode "$APK_NAME" "$APKTOOL_DECODE_OPTS"
 
 	echo -e "[>] \033[1mInjecting Frida gadget...\033[0m"
@@ -407,13 +407,13 @@ apk_patch(){
 					echo "[!!!!!!] No .locals found! :("
 					echo "[!!!!!!] TODO add .locals line"
 				fi
-				arr=("${lines[@]:0:$index+1+$skip}") 			# start of the array
+				arr=("${lines[@]:0:$index+1+$skip}") 		# start of the array
 				# We inject a loadLibrary just after the locals declaration.
 				# Objection add the loadLibrary call just before the method end.
 				arr+=( 'const-string v0, "frida-gadget"')
 				arr+=( 'invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V')
 				arr+=( "${lines[@]:$index+1+$skip}" ) 		# tail of the array
-        		lines=("${arr[@]}")     					# transfer back in the original array.
+        		lines=("${arr[@]}")     				# transfer back in the original array.
 			else
 				echo "[!!!!!!] No constructor found!"
 				echo "[!!!!!!] TODO: gonna use the full load library"
@@ -457,6 +457,13 @@ apk_patch(){
 		echo "[>] Writing the patched manifest back..."
 		printf "%s\n" "${manifest[@]}" > $MANIFEST_PATH
 	fi
+
+	#	Set android:extractNativeLibs="true" in the Manifest if you experience any adb: failed to install file.gadget.apk:
+	#	Failure [INSTALL_FAILED_INVALID_APK: Failed to extract native libraries, res=-2]
+	echo "[>] Enabling native libraries extraction if it was set to false..."
+	# If the tag exist and is set to false, set it to true, otherwise do nothing
+	sed -i "s/android:extractNativeLibs=\"false\"/android:extractNativeLibs=\"true\"/g" $MANIFEST_PATH
+	echo "[>] Done!"
 
 
 	APKTOOL_BUILD_OPTS="-o $APK_DIR.gadget.apk --use-aapt2"
