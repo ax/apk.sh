@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# apk.sh v1.0.10
+# apk.sh v1.0.11
 # author: ax - github.com/ax
 #
 # -----------------------------------------------------------------------------
@@ -40,7 +40,7 @@
 # -----------------------------------------------------------------------------
 #
 
-VERSION="1.0.10"
+VERSION="1.0.11"
 echo -e "[*] \033[1mapk.sh v$VERSION \033[0m"
 
 APK_SH_HOME="${HOME}/.apk.sh"
@@ -368,69 +368,68 @@ apk_patch(){
 	done
 	
 	#
-	# Now, patch the smali, look for the line with the apktool's comment "# direct methods" 
-	# Patch the smali with the appropriate loadLibrary call based on whether a constructor already exists or not.
+	# Now, patch the smali with the appropriate loadLibrary call based on whether a constructor already exists or not.
 	# If an existing constructor is present, the partial_load_library will be used.
 	# If no constructor is present, the full_load_library will be used.
 	#
-	# Objection checks if there is an existing <clinit> to determine which is the constructor,
-	# then they inject a loadLibrary just before the method end.
-	#
-	# We search for *init> and inject a loadLibrary just after the .locals declaration.
-	#
-	# <init> is the (or one of the) constructor(s) for the instance, and non-static field initialization.
-	# <clinit> are the static initialization blocks for the class, and static field initialization.
+	# Checks if there is an existing <clinit> to determine which is the class initializer block,
+    # executed once when the class loaded into memory,
+	# then they inject a loadLibrary just after the .locals declaration
 	#
 	echo "[>] $CLASS_PATH found!"
 	echo "[>] Patching smali..."
 	readarray -t lines < $CLASS_PATH
 	index=0
 	skip=1
+    STATIC_CONSTRUCTOR_FOUND=0;
 	for i in "${lines[@]}"
 	do
 		# partial_load_library
-		if [[ $i == "# direct methods" ]]; then
-			if [[   ${lines[$index+1]} == *"init>"* ]]; then
-				echo "[>>] A constructor is already present --> ${lines[$index+1]}"
-				echo "[>>] Injecting partial load library!"
-				# Skip  any .locals and write after
-				# Do we have to skip .annotations? is ok to write before them?
-				if [[ ${lines[$index+2]} =~ \.locals* ]]; then
-					echo "[>>] .locals declaration found!"
-					echo "[>>] Skipping .locals line..."
-					skip=2
-					echo "[>>] Update locals count..."
-					locals=`echo ${lines[$index+2]} | cut -d' ' -f2`
-					((locals++))
-					lines[$index+2]=".locals $locals"
-				else
-					echo "[!!!!!!] No .locals found! :("
-					echo "[!!!!!!] TODO add .locals line"
-				fi
-				arr=("${lines[@]:0:$index+1+$skip}") 		# start of the array
-				# We inject a loadLibrary just after the locals declaration.
-				# Objection add the loadLibrary call just before the method end.
-				arr+=( 'const-string v0, "frida-gadget"')
-				arr+=( 'invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V')
-				arr+=( "${lines[@]:$index+1+$skip}" ) 		# tail of the array
-        		lines=("${arr[@]}")     				# transfer back in the original array.
-			else
-				echo "[!!!!!!] No constructor found!"
-				echo "[!!!!!!] TODO: gonna use the full load library"
-				#arr+=('.method static constructor <clinit>()V')
-				#arr+=('   .locals 1')
-				#arr+=('')
-				#arr+=('   .prologue')
-				#arr+=('   const-string v0, "frida-gadget"')
-				#arr+=('')
-				#arr+=('   invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V')
-				#arr+=('')
-				#arr+=('   return-void')
-				#arr+=('.end method')
-			fi
+		if [[ $i == ".method static constructor <clinit>"* ]]; then
+            STATIC_CONSTRUCTOR_FOUND=1;
+            echo "[>>] A constructor is already present --> ${lines[$index]}"
+            echo "[>>] Injecting partial load library!"
+            # Skip  any .locals and write after
+            # Do we have to skip .annotations? is ok to write before them?
+            if [[ ${lines[$index+1]} =~ \.locals* ]]; then
+                echo "[>>] .locals declaration found!"
+                echo "[>>] Skipping .locals line..."
+                skip=2
+                echo "[>>] Update locals count..."
+                # The .locals directive specifies how many registers are allocated for the method.
+                # If the original method uses v0 and v1, our injected code uses v0, then the total should still be 2.
+                # So the local++ is probably wrong here. Anyway it should not affect VM execution, it should be just metadata. 
+                locals=`echo ${lines[$index+1]} | cut -d' ' -f2`
+                ((locals++))
+                lines[$index+1]=".locals $locals"
+            else
+                echo "[!!!!!!] No .locals found! :("
+                echo "[!!!!!!] TODO add .locals line"
+            fi
+            arr=("${lines[@]:0:$index+1+$skip}") 		# start of the array
+            # We inject a loadLibrary just after the locals declaration.
+            # Objection add the loadLibrary call just before the method end.
+            arr+=( '    const-string v0, "frida-gadget"')
+            arr+=( '    invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V')
+            arr+=( "${lines[@]:$index+1+$skip}" ) 		# tail of the array
+            lines=("${arr[@]}")     				# transfer back in the original array.
 		fi
 		((index++))
 	done
+    if [[ STATIC_CONSTRUCTOR_FOUND == 0  ]]; then
+        echo "[!!!!!!] No constructor found!"
+        echo "[!!!!!!] TODO: gonna use the full load library"
+        #arr+=('.method static constructor <clinit>()V')
+        #arr+=('   .locals 1')
+        #arr+=('')
+        #arr+=('   .prologue')
+        #arr+=('   const-string v0, "frida-gadget"')
+        #arr+=('')
+        #arr+=('   invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V')
+        #arr+=('')
+        #arr+=('   return-void')
+        #arr+=('.end method')
+    fi
 	echo "[>] Writing the patched smali back..."
 	printf "%s\n" "${lines[@]}" > $CLASS_PATH
 	
