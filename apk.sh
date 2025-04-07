@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# apk.sh v1.0.11
+# apk.sh v1.1
 # author: ax - github.com/ax
 #
 # -----------------------------------------------------------------------------
@@ -29,18 +29,18 @@
 #	-n, --net		Add a permissing network security config when building, optional.
 #				It can be used with patch, pull and rename also.
 #
-#	-s, --safe		Do not decode resources when decoding (i.e. apktool -r).
-#				Cannot be used when patching.
+#	-r, --no-res		Do not decode resources, optional. (i.e. apktool -r).
+#				Can be used when decoding and when patching.
 #
-#	-d, --no-dis		Do not disassemble dex, optional when decoding (i.e. apktool -s).
-#				Cannot be used when patching.
+#	-s, --no-src		Do not disassemble dex, optional. (i.e. apktool -s).
+#				Can be used when decoding and when patching.
 #
-#	--only-main-classes	Only disassemble the main dex classes, optional when decoding with apktool (i.e. apktool d --only-main-classes).
+#	--only-main-classes	Only disassemble the main dex classes, optional when decoding (i.e. apktool d --only-main-classes).
 #
 # -----------------------------------------------------------------------------
-#
 
-VERSION="1.0.11"
+
+VERSION="1.1"
 echo -e "[*] \033[1mapk.sh v$VERSION \033[0m"
 
 APK_SH_HOME="${HOME}/.apk.sh"
@@ -57,6 +57,9 @@ print_ "[*] DEBUG is TRUE"
 
 APKTOOL_VER=`wget https://api.github.com/repos/iBotPeaches/Apktool/releases/latest -q -O - | grep -Po "tag_name\": \"v\K.*?(?=\")"`
 APKTOOL_PATH="$APK_SH_HOME/apktool_$APKTOOL_VER.jar"
+# try local apktool without accessing internet
+
+DEXPATCH_PATH="$APK_SH_HOME/dexpatch-0.1.jar"
 
 BUILDTOOLS_VER="33.0.1"
 SDK_ROOT="$APK_SH_HOME/sdk_root"
@@ -73,6 +76,7 @@ else
 	ZIPALIGN="$BUILD_TOOLS/zipalign"
 	AAPT="$BUILD_TOOLS/aapt"
 fi
+
 if [ ! -d "$PLATFORM_TOOLS" ]; then
         ADB="adb"
 else
@@ -80,6 +84,17 @@ else
 fi
 
 CMDLINE_TOOLS_DIR="$APK_SH_HOME/cmdline-tools"
+
+check_dexpatch(){
+	if [ -f "$DEXPATCH_PATH" ]; then
+		echo "[*] DEXpatch v0.1 exist in $APK_SH_HOME"
+    else
+        DEXPATCH_DOWNLOAD_URL="https://github.com/ax/DEXPatch/releases/download/v0.1/dexpatch-0.1.jar"
+        echo "[!] No DEXpatch found!"
+		echo "[>] Downloading DEXpatch from $DEXPATCH_DOWNLOAD_URL"
+		wget $DEXPATCH_DOWNLOAD_URL -q --show-progress -P $APK_SH_HOME 
+    fi
+}
 
 install_cmdlinetools() {
 	CMDLINE_TOOLS_DOWNLOAD_URL="https://dl.google.com/android/repository/commandlinetools-linux-9123335_latest.zip"
@@ -203,7 +218,6 @@ exit_if_not_exist(){
 	fi
 }
 
-
 apk_decode(){
 	APK_NAME="$1"
 	DECODE_CMD_OPTS="$2"
@@ -213,7 +227,6 @@ apk_decode(){
 	run "$DECODE_CMD"
 	echo "[>] Done!"
 }
-
 
 apk_build(){
 	APK_DIR="$1"
@@ -249,7 +262,8 @@ apk_sign() {
 		echo "[>] A Keystore exist!"
 	fi
 	echo "[>] Signing $APK_NAME with apksigner..."
-	$APKSIGNER sign --ks $KS --ks-pass pass:password "$APK_NAME-aligned.apk"
+    echo " with $APKSIGNER sign --ks $KS --ks-pass pass:password $APK_NAME-aligned.apk"
+	run "$APKSIGNER sign --ks $KS --ks-pass pass:password $APK_NAME-aligned.apk"
 	#jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore my-new.keystore -storepass "password" file.apk alias_name
 	rm $APK_NAME
 	mv "$APK_NAME-aligned.apk" "$APK_NAME"
@@ -268,6 +282,11 @@ apk_patch(){
 	GADGET_CONF_PATH=$3
 	BUILD_OPTS=$4
 	DECODE_OPTS=$5
+	NO_DIS=$6
+	NO_RES=$7
+
+    print_ "NO DIS: $NO_DIS"
+    print_ "NO RES: $NO_RES"
 
 	arm=("armeabi" "armeabi-v7a")
 	arm64=("arm64-v8a" "arm64")
@@ -343,127 +362,145 @@ apk_patch(){
 	# TODO: If we dont get the activity, we gonna check out activity aliases trying to manually parse the AndroidManifest.
 	# Try to determine the local path for a target class' smali converting the main activity to a path
 	MAIN_ACTIVITY_2PATH=`echo $MAIN_ACTIVITY | tr '.' '/'`
-	CLASS_PATH="./$APK_DIR/smali/$MAIN_ACTIVITY_2PATH.smali"
-	echo "[>] Local path should be $CLASS_PATH"
-	# NOTE: if the class does not exist it might be a multidex setup.
-	# Search the class in smali_classesN directories. 
-	CLASS_PATH_IND=1 # starts from 2
-	# get max number of smali_classes
-    CLASS_PATH_IND_MAX=$(ls -1 "./$APK_DIR" | grep "_classes[0-9]*" | wc -l)
-	while [ ! -f "$CLASS_PATH" ]
-	do
-		echo "[!] $CLASS_PATH does not exist! Probably a multidex APK..."
-		if [ $CLASS_PATH_IND -gt $CLASS_PATH_IND_MAX ]; then
-			# keep searching until smali_classesN then exit
-			echo "[>] $CLASS_PATH NOT FOUND!"
-			echo "[!] Can't find the launchable-activity! Sorry."
-			echo "[>] Bye!"
-			exit 1
-		fi
-		CLASS_PATH_IND=$((CLASS_PATH_IND+1))
-		 # ./base/smali/
-		 # ./base/smali_classes2/
-		CLASS_PATH="./$APK_DIR/smali_classes$CLASS_PATH_IND/$MAIN_ACTIVITY_2PATH.smali"
-		echo "[?] Looking in $CLASS_PATH..."
-	done
-	
-	#
-	# Now, patch the smali with the appropriate loadLibrary call based on whether a constructor already exists or not.
-	# If an existing constructor is present, the partial_load_library will be used.
-	# If no constructor is present, the full_load_library will be used.
-	#
-	# Checks if there is an existing <clinit> to determine which is the class initializer block,
-    # executed once when the class loaded into memory,
-	# then they inject a loadLibrary just after the .locals declaration
-	#
-	echo "[>] $CLASS_PATH found!"
-	echo "[>] Patching smali..."
-	readarray -t lines < $CLASS_PATH
-	index=0
-	skip=1
-    STATIC_CONSTRUCTOR_FOUND=0;
-	for i in "${lines[@]}"
-	do
-		# partial_load_library
-		if [[ $i == ".method static constructor <clinit>"* ]]; then
-            STATIC_CONSTRUCTOR_FOUND=1;
-            echo "[>>] A constructor is already present --> ${lines[$index]}"
-            echo "[>>] Injecting partial load library!"
-            # Skip  any .locals and write after
-            # Do we have to skip .annotations? is ok to write before them?
-            if [[ ${lines[$index+1]} =~ \.locals* ]]; then
-                echo "[>>] .locals declaration found!"
-                echo "[>>] Skipping .locals line..."
-                skip=2
-                echo "[>>] Update locals count..."
-                # The .locals directive specifies how many registers are allocated for the method.
-                # If the original method uses v0 and v1, our injected code uses v0, then the total should still be 2.
-                # So the local++ is probably wrong here. Anyway it should not affect VM execution, it should be just metadata. 
-                locals=`echo ${lines[$index+1]} | cut -d' ' -f2`
-                ((locals++))
-                lines[$index+1]=".locals $locals"
-            else
-                echo "[!!!!!!] No .locals found! :("
-                echo "[!!!!!!] TODO add .locals line"
+    
+    if [[ $NO_DIS == 1 ]]; then
+        echo "[>] Patching with direct bytecode manipulation (no disassembly)..."
+        echo "[>] Searching the dex with the Activity $MAIN_ACTIVITY..."
+        MAIN_ACTIVITY_DEX=`grep -lr "$MAIN_ACTIVITY;" ./$APK_DIR/classes*.dex`
+        if [ -f "$MAIN_ACTIVITY_DEX" ]; then
+
+            echo "[>] $MAIN_ACTIVITY found in $MAIN_ACTIVITY_DEX"
+            echo "[>] Patching the dex..."
+            echo "[>] Running java -jar $DEXPATCH_PATH $MAIN_ACTIVITY_DEX $MAIN_ACTIVITY_DEX.gadget $MAIN_ACTIVITY_2PATH"
+            run "java -jar $DEXPATCH_PATH $MAIN_ACTIVITY_DEX $MAIN_ACTIVITY_DEX.gadget $MAIN_ACTIVITY_2PATH"
+            echo "[>] Renaming to $MAIN_ACTIVITY_DEX..."
+            mv $MAIN_ACTIVITY_DEX.gadget $MAIN_ACTIVITY_DEX
+        else
+            echo "[!] Can't find the dex with $MAIN_ACTIVITY! Sorry."
+            echo "[>] Bye!"
+            exit 1
+        fi
+    else
+        CLASS_PATH="./$APK_DIR/smali/$MAIN_ACTIVITY_2PATH.smali"
+        echo "[>] Local path should be $CLASS_PATH"
+        # NOTE: if the class does not exist it might be a multidex setup.
+        # Search the class in smali_classesN directories. 
+        CLASS_PATH_IND=1 # starts from 2
+        # get max number of smali_classes
+        CLASS_PATH_IND_MAX=$(ls -1 "./$APK_DIR" | grep "_classes[0-9]*" | wc -l)
+        while [ ! -f "$CLASS_PATH" ]
+        do
+            echo "[!] $CLASS_PATH does not exist! Probably a multidex APK..."
+            if [ $CLASS_PATH_IND -gt $CLASS_PATH_IND_MAX ]; then
+                # keep searching until smali_classesN then exit
+                echo "[>] $CLASS_PATH NOT FOUND!"
+                echo "[!] Can't find the launchable-activity! Sorry."
+                echo "[>] Bye!"
+                exit 1
             fi
-            arr=("${lines[@]:0:$index+1+$skip}") 		# start of the array
-            # We inject a loadLibrary just after the locals declaration.
-            # Objection add the loadLibrary call just before the method end.
-            arr+=( '    const-string v0, "frida-gadget"')
-            arr+=( '    invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V')
-            arr+=( "${lines[@]:$index+1+$skip}" ) 		# tail of the array
-            lines=("${arr[@]}")     				# transfer back in the original array.
-		fi
-		((index++))
-	done
-    if [[ STATIC_CONSTRUCTOR_FOUND == 0  ]]; then
-        echo "[!!!!!!] No constructor found!"
-        echo "[!!!!!!] TODO: gonna use the full load library"
-        #arr+=('.method static constructor <clinit>()V')
-        #arr+=('   .locals 1')
-        #arr+=('')
-        #arr+=('   .prologue')
-        #arr+=('   const-string v0, "frida-gadget"')
-        #arr+=('')
-        #arr+=('   invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V')
-        #arr+=('')
-        #arr+=('   return-void')
-        #arr+=('.end method')
-    fi
-	echo "[>] Writing the patched smali back..."
-	printf "%s\n" "${lines[@]}" > $CLASS_PATH
-	
-	# Add the Internet permission to the manifest if it’s not there already, to permit Frida gadget to open a socket.
-	echo "[?] Checking if Internet permission is present in the manifest..."
-	INTERNET_PERMISSION=0
-	MANIFEST_PATH="$APK_DIR/AndroidManifest.xml"
-	readarray -t manifest < $MANIFEST_PATH
-	for i in "${manifest[@]}"
-	do
-		if [[ "$i" == *"<uses-permission android:name=\"android.permission.INTERNET\"/>"* ]]; then
-			INTERNET_PERMISSION=1
-			echo "[>] Internet permission is there!"
-			break
-		fi
-	done
-	if [[ $INTERNET_PERMISSION == 0 ]]; then
-		echo "[!] Internet permission not present in the Manifest!"
-		echo "[>] Patching $MANIFEST_PATH"
-		arr=("${manifest[@]:0:1}") 			# start of the array
-		arr+=( '<uses-permission android:name="android.permission.INTERNET"/>')
-		arr+=( "${manifest[@]:1}" ) 		# tail of the array
-        manifest=("${arr[@]}")     		# transfer back in the original array.
-		echo "[>] Writing the patched manifest back..."
-		printf "%s\n" "${manifest[@]}" > $MANIFEST_PATH
-	fi
+            CLASS_PATH_IND=$((CLASS_PATH_IND+1))
+             # ./base/smali/
+             # ./base/smali_classes2/
+            CLASS_PATH="./$APK_DIR/smali_classes$CLASS_PATH_IND/$MAIN_ACTIVITY_2PATH.smali"
+            echo "[?] Looking in $CLASS_PATH..."
+        done
+        # Patch the smali with the appropriate loadLibrary call based on whether a constructor already exists or not.
+        # If an existing constructor is present, the partial_load_library will be used.
+        # If no constructor is present, the full_load_library will be used.
+        #
+        # Checks if there is an existing <clinit> to determine which is the class initializer block,
+        # executed once when the class loaded into memory,
+        # then they inject a loadLibrary just after the .locals declaration
+        #
+        echo "[>] $CLASS_PATH found!"
+        echo "[>] Patching smali..."
+        readarray -t lines < $CLASS_PATH
+        index=0
+        skip=1
+        STATIC_CONSTRUCTOR_FOUND=0;
+        for i in "${lines[@]}"
+        do
+            # partial_load_library
+            if [[ $i == ".method static constructor <clinit>"* ]]; then
+                STATIC_CONSTRUCTOR_FOUND=1;
+                echo "[>>] A constructor is already present --> ${lines[$index]}"
+                echo "[>>] Injecting partial load library!"
+                # Skip  any .locals and write after
+                # Do we have to skip .annotations? is ok to write before them?
+                if [[ ${lines[$index+1]} =~ \.locals* ]]; then
+                    echo "[>>] .locals declaration found!"
+                    echo "[>>] Skipping .locals line..."
+                    skip=2
+                    echo "[>>] Update locals count..."
+                    # The .locals directive specifies how many registers are allocated for the method.
+                    # If the original method uses v0 and v1, our injected code uses v0, then the total should still be 2.
+                    # So the local++ is probably wrong here. Anyway it should not affect VM execution, it should be just metadata. 
+                    locals=`echo ${lines[$index+1]} | cut -d' ' -f2`
+                    ((locals++))
+                    lines[$index+1]=".locals $locals"
+                else
+                    echo "[!!!!!!] No .locals found! :("
+                    echo "[!!!!!!] TODO add .locals line"
+                fi
+                arr=("${lines[@]:0:$index+1+$skip}") 		# start of the array
+                # We inject a loadLibrary just after the locals declaration.
+                # Objection add the loadLibrary call just before the method end.
+                arr+=( '    const-string v0, "frida-gadget"')
+                arr+=( '    invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V')
+                arr+=( "${lines[@]:$index+1+$skip}" ) 		# tail of the array
+                lines=("${arr[@]}")     				# transfer back in the original array.
+            fi
+            ((index++))
+        done
+        if [[ $STATIC_CONSTRUCTOR_FOUND == 0  ]]; then
+            echo "[!!!!!!] No constructor found!"
+            echo "[!!!!!!] TODO: gonna use the full load library"
+            #arr+=('.method static constructor <clinit>()V')
+            #arr+=('   .locals 1')
+            #arr+=('')
+            #arr+=('   .prologue')
+            #arr+=('   const-string v0, "frida-gadget"')
+            #arr+=('')
+            #arr+=('   invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V')
+            #arr+=('')
+            #arr+=('   return-void')
+            #arr+=('.end method')
+        fi
+        echo "[>] Writing the patched smali back..."
+        printf "%s\n" "${lines[@]}" > $CLASS_PATH
 
-	#	Set android:extractNativeLibs="true" in the Manifest if you experience any adb: failed to install file.gadget.apk:
-	#	Failure [INSTALL_FAILED_INVALID_APK: Failed to extract native libraries, res=-2]
-	echo "[>] Enabling native libraries extraction if it was set to false..."
-	# If the tag exist and is set to false, set it to true, otherwise do nothing
-	sed -i "s/android:extractNativeLibs=\"false\"/android:extractNativeLibs=\"true\"/g" $MANIFEST_PATH
-	echo "[>] Done!"
-
+        if [ $NO_RES -ne 1 ]; then
+            # Add the Internet permission to the manifest if it’s not there already, to permit Frida gadget to open a socket.
+            echo "[?] Checking if Internet permission is present in the manifest..."
+            INTERNET_PERMISSION=0
+            MANIFEST_PATH="$APK_DIR/AndroidManifest.xml"
+            readarray -t manifest < $MANIFEST_PATH
+            for i in "${manifest[@]}"
+            do
+                if [[ "$i" == *"<uses-permission android:name=\"android.permission.INTERNET\"/>"* ]]; then
+                    INTERNET_PERMISSION=1
+                    echo "[>] Internet permission is there!"
+                    break
+                fi
+            done
+            if [[ $INTERNET_PERMISSION == 0 ]]; then
+                echo "[!] Internet permission not present in the Manifest!"
+                echo "[>] Patching $MANIFEST_PATH"
+                arr=("${manifest[@]:0:1}") 			# start of the array
+                arr+=( '<uses-permission android:name="android.permission.INTERNET"/>')
+                arr+=( "${manifest[@]:1}" ) 		# tail of the array
+                manifest=("${arr[@]}")     		# transfer back in the original array.
+                echo "[>] Writing the patched manifest back..."
+                printf "%s\n" "${manifest[@]}" > $MANIFEST_PATH
+            fi
+            # Set android:extractNativeLibs="true" in the Manifest if you experience any adb: failed to install file.gadget.apk:
+            # Failure [INSTALL_FAILED_INVALID_APK: Failed to extract native libraries, res=-2]
+            echo "[>] Enabling native libraries extraction if it was set to false..."
+            # If the tag exist and is set to false, set it to true, otherwise do nothing
+            sed -i "s/android:extractNativeLibs=\"false\"/android:extractNativeLibs=\"true\"/g" $MANIFEST_PATH
+            echo "[>] Done!"
+        fi #end NO_RES
+    fi #end NO_DIS if
 
 	APKTOOL_BUILD_OPTS="-o $APK_DIR.gadget.apk --use-aapt2"
 	APKTOOL_BUILD_OPTS="$APKTOOL_BUILD_OPTS $BUILD_OPTS"
@@ -620,6 +657,7 @@ apk_rename(){
 #####################################################################
 
 check_apk_tools 
+check_dexpatch
 
 if [ ! -z $1 ]&&[ $1 == "build" ]; then
 	if [ -z "$2" ]; then
@@ -675,11 +713,11 @@ elif [ ! -z $1 ]&&[ $1 == "decode" ]; then
 	shift # pop SUBCOMMAND_ARG
 	while [[ $# -gt 0 ]]; do
 		case $1 in
-			-s|--safe)
+			-r|--no-res)
 		  		APKTOOL_DECODE_OPTS="$APKTOOL_DECODE_OPTS -r" # no decode res
 				shift # arg
 		  	;;
-			-d|--no-dis)
+			-s|--no-src)
 		  		APKTOOL_DECODE_OPTS="$APKTOOL_DECODE_OPTS -s" # no disass dex
 				shift # argument
 		  	;;
@@ -707,6 +745,7 @@ elif [ ! -z $1 ]&&[ $1 == "patch" ]; then
 	APKTOOL_BUILD_OPTS=""
 	GADGET_CONF_PATH=""
 	APKTOOL_DECODE_OPTS=""
+    NO_DIS=0
 	exit_if_not_exist "$APK_NAME"
 	shift # pop SUBCOMMAND
 	shift # pop SUBCOMMAND_ARG
@@ -732,6 +771,16 @@ elif [ ! -z $1 ]&&[ $1 == "patch" ]; then
 		  		APKTOOL_DECODE_OPTS="$APKTOOL_DECODE_OPTS --only-main-classes"
 		  		shift # argument
 		  	;;		
+			-r|--no-res)
+		  		APKTOOL_DECODE_OPTS="$APKTOOL_DECODE_OPTS -r"
+                NO_RES=1
+		  		shift # argument
+		  	;;
+			-s|--no-src)
+		  		APKTOOL_DECODE_OPTS="$APKTOOL_DECODE_OPTS -s"
+                NO_DIS=1
+		  		shift # argument
+		  	;;
 			-*|--*)
 		  		echo "[!] Unknown option $1"
 		  		exit 1
@@ -753,7 +802,7 @@ elif [ ! -z $1 ]&&[ $1 == "patch" ]; then
 		echo "[>] Bye!"
 		exit 1
 	fi
-	apk_patch "$APK_NAME" "$ARCH" "$GADGET_CONF_PATH" "$APKTOOL_BUILD_OPTS" "$APKTOOL_DECODE_OPTS"
+	apk_patch "$APK_NAME" "$ARCH" "$GADGET_CONF_PATH" "$APKTOOL_BUILD_OPTS" "$APKTOOL_DECODE_OPTS" "$NO_DIS" "$NO_RES"
 	exit 0
 
 elif [ ! -z $1 ]&&[ $1 == "pull" ]; then
