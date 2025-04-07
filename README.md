@@ -7,7 +7,8 @@ apk.sh basically uses [apktool](https://ibotpeaches.github.io/Apktool/) to disas
 It also supports app bundles/split APKs. 
 
  -  :mushroom: Patching APKs to load frida-gadget.so on start.
- -  :new: Support for app bundles/split APKs.
+ -  :new: Support direct bytecode manipulation with no decompilation, this avoids decompilation/recompilation errors.
+ -  :bento: Support for app bundles/split APKs.
  -  :wrench: Disassembling resources to nearly original form with apktool.
  -  :nut_and_bolt: Rebuilding decoded resources back to binary APK/JAR with apktool.
  -  :old_key: Code signing the apk with apksigner.
@@ -149,10 +150,9 @@ console.log = function(str) {
 
 `-n, --net` Add a permissive network security config when building, optional. It can be used with patch, pull and rename also.
 
-`-s, --safe` Do not decode resources when decoding (i.e. apktool -r). Cannot be used when patching.
+`-r, --no-res` Do not decode resources when decoding (i.e. apktool -r), optional. Can be used when patching.
 
-`-d, --no-dis` Do not disassemble dex, optional when decoding (i.e. apktool -s). Cannot be used when patching.
-
+`-s, --no-src` Do not disassemble dex when decoding (i.e. apktool -s), optional. Can be used when patching.
 
 ## :page_with_curl: Links of Interest
 https://frida.re/docs/gadget/
@@ -166,3 +166,5 @@ https://github.com/sensepost/objection/
 https://github.com/NickstaDB/patch-apk/
 
 https://neo-geo2.gitbook.io/adventures-on-security/frida-scripting-guide/frida-scripting-guide
+
+https://github.com/ax/DEXPatch
