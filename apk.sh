@@ -469,7 +469,7 @@ apk_patch(){
         echo "[>] Writing the patched smali back..."
         printf "%s\n" "${lines[@]}" > $CLASS_PATH
 
-        if [ $NO_RES -ne 1 ]; then
+        if [ "$NO_RES" -ne 1 ]; then
             # Add the Internet permission to the manifest if it’s not there already, to permit Frida gadget to open a socket.
             echo "[?] Checking if Internet permission is present in the manifest..."
             INTERNET_PERMISSION=0
