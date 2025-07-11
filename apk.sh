@@ -502,7 +502,7 @@ apk_patch(){
         fi #end NO_RES
     fi #end NO_DIS if
 
-	APKTOOL_BUILD_OPTS="-o $APK_DIR.gadget.apk --use-aapt2"
+	APKTOOL_BUILD_OPTS="-o $APK_DIR.gadget.apk --use-aapt1"
 	APKTOOL_BUILD_OPTS="$APKTOOL_BUILD_OPTS $BUILD_OPTS"
 	apk_build "$APK_DIR" "$APKTOOL_BUILD_OPTS"
 	echo "[>] Bye!"
