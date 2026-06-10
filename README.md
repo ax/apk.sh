@@ -126,6 +126,7 @@ console.log = function(str) {
 - zipalign
 - aapt
 - adb
+- unzip
 
 ## Usage 
 ### SYNOPSIS
