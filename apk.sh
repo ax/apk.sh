@@ -231,7 +231,7 @@ apk_decode(){
 apk_build(){
 	APK_DIR="$1"
 	BUILD_CMD_OPTS="$2"
-	BUILD_CMD_START="java -jar $APKTOOL_PATH b -d "
+	BUILD_CMD_START="java -jar $APKTOOL_PATH b --debuggable "
 	BUILD_CMD="$BUILD_CMD_START $APK_DIR $BUILD_CMD_OPTS"
 	APK_NAME=`echo "$BUILD_CMD_OPTS" | grep -Po "\-o \K.*?(?= )"`
 	if [ -z $APK_NAME ]; then
@@ -556,7 +556,7 @@ apk_pull(){
 			print_ $i
 			APK_NAME=$i
 			APK_DIR=${APK_NAME%.apk} # bash 3.x compliant xD
-			APKTOOL_DECODE_OPTS="-resm dummy -o $APK_DIR 1>/dev/null"
+			APKTOOL_DECODE_OPTS="--res-resolve-mode default -o $APK_DIR 1>/dev/null"
 			apk_decode "$APK_NAME" "$APKTOOL_DECODE_OPTS"
 		done
 		# Walk the extracted APKs dirs and copy files and dirs to the base APK dir. 
